@@ -29,7 +29,7 @@ function ScrollToTop() {
 function App() {
 
   return (
-    <Router basename="/ali-portfolio">
+    <Router basename="/ali-portfolio-share">
       <ScrollToTop />
       <Routes>
         <Route path="/" element={<Navigate to="/home" replace />} />
