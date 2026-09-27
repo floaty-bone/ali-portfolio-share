@@ -259,7 +259,7 @@ export function ContactFooter() {
           <Reveal delay={120} className="justify-self-start md:justify-self-end">
             <div className="panel w-[210px] overflow-hidden p-2">
               <img
-                src="/ali-portfolio/images-videos/profilePic.png"
+                src="/ali-portfolio-share/images-videos/profilePic.png"
                 alt="Ali Abouelazz"
                 className="h-auto w-full rounded-xl object-cover"
               />
