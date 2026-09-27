@@ -162,6 +162,24 @@ const ExperienceEducationPage = () => {
               </div>
             </div>
 
+            {/* Final Year Internship: withheld from this link for NDA reasons */}
+            <div className="flex mb-10">
+              <div className="mr-4" style={{ width: '90px' }} />
+              <div className="mb-12">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="text-2xl mb-2 text-gray-400">Final Year Internship — details withheld</h4>
+                    <p className="text-gray-400 mb-4">02/2025 to 09/2025</p>
+                  </div>
+                </div>
+                <p className="text-gray-300 leading-relaxed">
+                  This internship's content (including CAD/technical screenshots) is under a non-disclosure
+                  agreement (NDA) with the company, so it isn't shown on this particular link. Happy to discuss
+                  it in more detail directly.
+                </p>
+              </div>
+            </div>
+
             {/* General Electric Internship */}
             <div className="flex mb-10">
               <div className="mr-4">
