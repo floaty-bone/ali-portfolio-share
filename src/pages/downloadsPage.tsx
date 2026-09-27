@@ -1402,9 +1402,9 @@ const DownloadsPage = () => {
           <MajorSection title="Internships" initialOpen={INTERNSHIP_IDS.includes(openSection)}>
             <SubSection label="Final Year Internship" title="Details withheld (NDA)" id="caterpillar-nda">
               <Para>
-                This internship's content, including CAD and technical screenshots, is under a non-disclosure
-                agreement (NDA) with the company, so it isn't shown on this particular link. Happy to walk through
-                it directly if useful.
+                This internship involved proprietary CAD and technical work covered under a non-disclosure
+                agreement (NDA) with the company, so I can't share those details or screenshots publicly.
+                Happy to walk through the project verbally in an interview.
               </Para>
             </SubSection>
             <SubSection label="Engineering Internship" title="General Electric Vernova" id="ge" initialOpen={openSection === 'ge'}>
