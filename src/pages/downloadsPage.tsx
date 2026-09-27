@@ -1,0 +1,1637 @@
+import React, { useState, useEffect } from 'react';
+import { ExternalLink, X } from 'lucide-react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
+import { PageShell, Reveal, SectionHeading } from '../components/SiteChrome';
+
+const BASE = '/ali-portfolio/portfolio-images';
+
+// ─── KaTeX helpers ────────────────────────────────────────────────────────────
+
+function Eq({ children, display = false }: { children: string; display?: boolean }) {
+  const html = katex.renderToString(children, { throwOnError: false, displayMode: display });
+  return <span dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+function EqBlock({ children }: { children: string }) {
+  const html = katex.renderToString(children, { throwOnError: false, displayMode: true });
+  return <div className="my-3 overflow-x-auto" dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+// ─── Lightbox: click any figure to inspect it full screen ────────────────────
+
+type LightboxItem = { src: string; caption?: string };
+const LightboxCtx = React.createContext<(item: LightboxItem) => void>(() => {});
+const useLightbox = () => React.useContext(LightboxCtx);
+
+function LightboxProvider({ children }: { children: React.ReactNode }) {
+  const [item, setItem] = useState<LightboxItem | null>(null);
+
+  useEffect(() => {
+    if (!item) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setItem(null);
+    window.addEventListener('keydown', onKey);
+    // Freeze the page behind the overlay.
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [item]);
+
+  return (
+    <LightboxCtx.Provider value={setItem}>
+      {children}
+      {item && (
+        <div
+          className="fixed inset-0 z-[200] flex animate-fade-in cursor-zoom-out flex-col items-center
+                     justify-center gap-6 bg-ink/94 p-6 backdrop-blur-xl sm:p-12"
+          onClick={() => setItem(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <img
+            src={item.src}
+            alt={item.caption ?? ''}
+            className="max-h-[82vh] max-w-full animate-zoom-in rounded-xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+          {item.caption && (
+            <p className="max-w-2xl text-center font-mono text-[0.65rem] leading-relaxed tracking-wide text-white/45">
+              {item.caption}
+            </p>
+          )}
+          <button
+            onClick={() => setItem(null)}
+            aria-label="Close"
+            className="absolute right-7 top-7 text-white/40 transition-colors duration-300 hover:text-sand"
+          >
+            <X className="h-4 w-4" strokeWidth={1.5} />
+          </button>
+        </div>
+      )}
+    </LightboxCtx.Provider>
+  );
+}
+
+/* Frame shared by every figure: hover lift, zoom cursor, opens the lightbox. */
+function ZoomFrame({
+  src, caption, className = '', imgClassName = '',
+}: { src: string; caption?: string; className?: string; imgClassName?: string }) {
+  const open = useLightbox();
+  return (
+    <button
+      type="button"
+      onClick={() => open({ src, caption })}
+      className={`group/fig relative block cursor-zoom-in overflow-hidden ${className}`}
+    >
+      <img
+        src={src}
+        alt={caption ?? ''}
+        loading="lazy"
+        className={`block opacity-90 transition-opacity duration-500 group-hover/fig:opacity-100 ${imgClassName}`}
+      />
+    </button>
+  );
+}
+
+// ─── Layout primitives ────────────────────────────────────────────────────────
+
+function Subsection({ title }: { title: string }) {
+  return (
+    <h4 className="mb-4 mt-10 text-base font-normal tracking-display text-sand-soft">{title}</h4>
+  );
+}
+
+function Subsubsection({ title }: { title: string }) {
+  return (
+    <h5 className="mb-2 mt-5 font-mono text-[0.65rem] font-medium uppercase tracking-[0.18em] text-white/45">
+      {title}
+    </h5>
+  );
+}
+
+function Para({ children }: { children: React.ReactNode }) {
+  return <p className="mb-3.5 max-w-3xl text-[0.92rem] font-light leading-[1.75] text-white/65">{children}</p>;
+}
+
+function Outcome({ title, children }: { accent?: string; title: string; children: React.ReactNode }) {
+  return (
+    <div className="mt-8 border-l border-sand/35 pl-6">
+      <p className="mb-3 font-mono text-[0.62rem] font-medium uppercase tracking-[0.2em] text-sand">{title}</p>
+      <div className="space-y-1 text-sm font-light leading-relaxed text-white/65">{children}</div>
+    </div>
+  );
+}
+
+function DataTable({ caption, rows, head }: { caption: string; rows: string[][]; head: string[] }) {
+  return (
+    <div className="my-6">
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs text-white/65">
+          <thead>
+            <tr className="border-b border-white/15">
+              {head.map((h) => (
+                <th key={h} className="py-3 pr-8 text-left font-mono text-[0.6rem] font-medium uppercase tracking-[0.14em] text-white/40 last:pr-0">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i} className="border-b border-white/[0.06] last:border-0">
+                {row.map((cell, j) => <td key={j} className="py-2.5 pr-8 font-light last:pr-0">{cell}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-3 font-mono text-[0.62rem] tracking-wide text-white/35">{caption}</p>
+    </div>
+  );
+}
+
+function Fig({ src, caption, small, medium, large, sizeOverride }: { src: string; caption: string; small?: boolean; medium?: boolean; large?: boolean; sizeOverride?: string }) {
+  const imgClass = sizeOverride ? sizeOverride
+    : small ? 'max-h-48 max-w-sm' : medium ? 'max-h-[30rem] max-w-3xl' : large ? 'max-h-[40rem] max-w-4xl' : 'max-h-60 max-w-xl';
+  return (
+    <div className="my-6 flex flex-col items-center">
+      <ZoomFrame src={src} caption={caption} className="inline-block" imgClassName={`h-auto w-auto ${imgClass}`} />
+      <p className="mt-3 max-w-lg text-center font-mono text-[0.62rem] leading-relaxed tracking-wide text-white/35">{caption}</p>
+    </div>
+  );
+}
+
+function FigRow({ items, size, sizeOverride }: { items: { src: string; caption?: string }[]; size?: 'lg' | 'md'; sizeOverride?: string }) {
+  const heightCap = sizeOverride ? sizeOverride.match(/max-h-(\[[^\]]+\]|\S+)/)?.[0].replace('max-h-', 'h-')
+    : size === 'lg' ? 'h-[28rem]'
+    : size === 'md' ? 'h-[19.6rem]'
+    : 'h-48';
+  const widthCap = sizeOverride ? sizeOverride.match(/max-w-(\[[^\]]+\]|\S+)/)?.[0]
+    : size === 'lg' ? 'max-w-2xl'
+    : size === 'md' ? 'max-w-[29.4rem]'
+    : 'max-w-sm';
+  return (
+    <div className="my-6">
+      <div className="flex flex-wrap justify-center gap-3">
+        {items.map((item, i) => (
+          <ZoomFrame
+            key={i}
+            src={item.src}
+            caption={item.caption}
+            className={`${heightCap} ${widthCap} flex items-center justify-center`}
+            imgClassName="h-full w-auto object-contain"
+          />
+        ))}
+      </div>
+      {items.some(i => i.caption) && (
+        <p className="mt-3 text-center font-mono text-[0.62rem] leading-relaxed tracking-wide text-white/35">{items.map(i => i.caption).filter(Boolean).join('  ·  ')}</p>
+      )}
+    </div>
+  );
+}
+
+// ─── Image gallery (used where LaTeX had multiple figures in a section) ────────
+
+// ─── Major section (top-level accordion) ─────────────────────────────────────
+
+/* Smoothly animates its children's height between collapsed and expanded.
+   grid-template-rows 0fr → 1fr is the only way to transition to auto height. */
+function Collapse({ open, children }: { open: boolean; children: React.ReactNode }) {
+  // Mount lazily on first open, then keep mounted so closing animates too.
+  // Sections carry a lot of KaTeX and imagery — rendering them all up front
+  // would cost far more than the animation is worth.
+  const [mounted, setMounted] = useState(open);
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+
+  return (
+    <div
+      className="grid transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
+      style={{ gridTemplateRows: open ? '1fr' : '0fr', opacity: open ? 1 : 0 }}
+      aria-hidden={!open}
+    >
+      <div className="overflow-hidden">{mounted && children}</div>
+    </div>
+  );
+}
+
+/* Plus that rotates into a cross when its section opens. The vertical stroke
+   fades out as it turns, so an open section reads as a single quiet minus. */
+function PlusToggle({ open }: { open: boolean }) {
+  return (
+    <span
+      className="relative ml-4 flex h-3.5 w-3.5 flex-shrink-0 self-center items-center justify-center transition-transform
+                 duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
+      style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
+    >
+      <span className="absolute h-px w-full bg-white/40 transition-colors duration-500 group-hover:bg-sand" />
+      <span
+        className="absolute h-full w-px bg-white/40 transition-all duration-500 group-hover:bg-sand"
+        style={{ opacity: open ? 0 : 1 }}
+      />
+    </span>
+  );
+}
+
+function MajorSection({ title, children, initialOpen }: { title: string; children: React.ReactNode; initialOpen?: boolean }) {
+  const [open, setOpen] = useState(initialOpen ?? false);
+  // Number the sub-sections 01, 02, … in source order.
+  const numbered = React.Children.map(children, (child, i) =>
+    React.isValidElement(child)
+      ? React.cloneElement(child as React.ReactElement<{ index?: number }>, { index: i + 1 })
+      : child,
+  );
+
+  return (
+    <div className="w-full">
+      <button className="group flex w-full items-center gap-6 py-8 text-left" onClick={() => setOpen(o => !o)}>
+        <h2 className="display whitespace-nowrap text-2xl transition-colors duration-500 group-hover:text-sand sm:text-3xl">
+          {title}
+        </h2>
+
+        {/* Light strip: sweeps in from the left as the section opens */}
+        <span className="relative h-px flex-1 bg-white/[0.08]">
+          <span
+            className="absolute inset-0 origin-left bg-sand/60 transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            style={{ transform: open ? 'scaleX(1)' : 'scaleX(0)' }}
+          />
+        </span>
+        <PlusToggle open={open} />
+      </button>
+
+      <Collapse open={open}>
+        <div className="pb-12">{numbered}</div>
+      </Collapse>
+    </div>
+  );
+}
+
+// ─── Sub-section (nested accordion inside a MajorSection) ────────────────────
+
+function SubSection({
+  label, title, children, id, initialOpen, index,
+}: {
+  label: string; title: string; accent?: string; children: React.ReactNode;
+  id?: string; initialOpen?: boolean; index?: number;
+}) {
+  const [open, setOpen] = useState(initialOpen ?? false);
+
+  return (
+    <div id={id} className="w-full border-b border-white/[0.07]">
+      <button
+        className="group flex w-full items-stretch gap-6 py-7 text-left sm:gap-10"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+      >
+        {/* Light strip: draws down from the top as the project opens */}
+        <span className="relative w-px flex-shrink-0 self-stretch overflow-hidden bg-white/[0.09]">
+          <span
+            className="absolute inset-0 origin-top bg-sand transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            style={{ transform: open ? 'scaleY(1)' : 'scaleY(0)' }}
+          />
+        </span>
+
+        {index !== undefined && (
+          <span
+            className="hidden self-start font-mono text-[0.62rem] tabular-nums tracking-[0.18em] transition-colors duration-500 sm:block"
+            style={{ color: open ? '#C9A96A' : 'rgba(255,255,255,0.22)' }}
+          >
+            {String(index).padStart(2, '0')}
+          </span>
+        )}
+
+        <span className="min-w-0 flex-1">
+          <span
+            className="mb-2 block font-mono text-[0.62rem] font-medium uppercase tracking-[0.2em] transition-colors duration-500"
+            style={{ color: open ? '#C9A96A' : 'rgba(255,255,255,0.30)' }}
+          >
+            {label}
+          </span>
+          <span className="block text-xl font-light tracking-display text-white/90 transition-colors duration-300 group-hover:text-sand">
+            {title}
+          </span>
+        </span>
+
+        <PlusToggle open={open} />
+      </button>
+
+      <Collapse open={open}>
+        <div className="pb-14 pt-1 sm:pl-[4.5rem]">{children}</div>
+      </Collapse>
+    </div>
+  );
+}
+
+// ─── Rocket demo card ─────────────────────────────────────────────────────────
+
+function RocketDemoCard() {
+  const navigate = useNavigate();
+  return (
+    <div
+      className="group flex cursor-pointer flex-col items-start gap-6 border-y border-white/[0.07] py-8
+                 transition-colors duration-500 hover:border-sand/30 md:flex-row md:items-center"
+      onClick={() => navigate('/rocketDemo')}
+    >
+      <div className="min-w-0 flex-1">
+        <p className="eyebrow mb-2.5">Live 3D demo · Personal study</p>
+        <h3 className="mb-2.5 text-2xl font-light tracking-display text-white/90 transition-colors duration-300 group-hover:text-sand">
+          Starship Booster Landing
+        </h3>
+        <p className="max-w-xl text-sm font-light leading-relaxed text-white/50">
+          Experimenting with LQR full state feedback control, live 3D simulation launch demo.
+        </p>
+      </div>
+      <span
+        className="flex flex-shrink-0 items-center gap-2.5 font-mono text-[0.62rem] uppercase tracking-[0.18em]
+                   text-white/45 transition-colors duration-300 group-hover:text-sand"
+      >
+        Launch demo
+        <ExternalLink className="h-3.5 w-3.5 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+      </span>
+    </div>
+  );
+}
+
+// ─── GE Vernova content ───────────────────────────────────────────────────────
+
+function GEContent() {
+  return (
+    <>
+      <Subsection title="Project 1: Stiffness Measurement Station" />
+
+      <Subsubsection title="Objective" />
+      <Para>
+        Design (mechanical and software components) of a stiffness measurement station for the finger contact springs of
+        the new series of live tank circuit breakers. The purpose of this station is to ensure the conformity of the
+        finger contact springs after assembly in the housing.
+      </Para>
+
+      <Subsubsection title="Execution" />
+      <Para>
+        My responsibility was to develop the station in its entirety, both mechanically and in terms of software. I
+        began by defining requirements with the various stakeholders (quality department, operators, design office).
+        These needs were translated into system level requirements, then broken down into subsystem level requirements
+        and further into component level requirements (top down design approach).
+      </Para>
+      <Para>
+        Once the component level requirements were defined, I began the design phase while simultaneously working with
+        my supervisor to identify the simulations needed to validate the measurement accuracy requirements. After
+        dimensional validation, I produced the engineering drawings, which were then sent to the procurement department.
+      </Para>
+      <Para>
+        The software component was developed in parallel. I created a graphical user interface for data visualisation
+        and control of the force sensor, then synchronised it with the site database for data logging.
+      </Para>
+
+      <FigRow size="lg" items={[
+        { src: `${BASE}/image9.png`, caption: 'Mechanical design of the measurement station' },
+        { src: `${BASE}/image10.png`, caption: 'Software interface and data acquisition system' },
+      ]} />
+
+      <Subsection title="Project 2: Power Transmission Shaft Sizing" />
+
+      <Subsubsection title="Objective" />
+      <Para>
+        Sizing of a redesigned power transmission shaft for the opening mechanism of GCB (Ground Circuit Breaker)
+        circuit breakers. The previous system was costly and sensitive to coaxiality defects.
+      </Para>
+
+      <Subsubsection title="Execution" />
+      <Para>
+        I sized a new shaft design by first simulating the various proposals made by a colleague. I iterated over
+        different dimensions and made minor modifications to achieve the required safety factor without exceeding it.
+        The redesign aimed to simplify machining operations and, most importantly, to reduce the amount of material
+        used, which represented a significant cost for the company.
+      </Para>
+
+      <Fig large src={`${BASE}/image99.png`} caption="FEA analysis of the initial design" />
+
+      <Subsection title="Project 3: Stress Analysis of SF6 Gas Chamber" />
+
+      <Subsubsection title="Objective" />
+      <Para>
+        Determine the mechanical stress in the SF6 gas chamber due to the gas pressure, which was increased in order to
+        extend the service life of the tulip contacts. The objective is to ensure that the safety factor remains above 5
+        as specified in the design requirements (CDC 912625/CODAP).
+      </Para>
+
+      <Subsubsection title="Execution" />
+      <Para>
+        The load was applied to the inner walls to simulate a static pressure of <Eq>{'p = 1.6\\ \\text{MPa}'}</Eq>.
+        Material used: A-S7G03.
+      </Para>
+
+      <Fig large src={`${BASE}/image1.png`} caption="FEA model of the gas chamber" />
+    </>
+  );
+}
+
+// ─── Caterpillar content ──────────────────────────────────────────────────────
+
+function CatContent() {
+  return (
+    <>
+      <Subsection title="Objective and Context" />
+      <Para>
+        The Caterpillar D5 bulldozer had been accumulating field failures on its chain tensioner assembly: grease leaks,
+        cracked plugs, worn retainer plates, premature piston seal failures. The product support team had flagged the
+        problem but the failure modes had never been quantified, and the dominant root causes were still unclear. My
+        internship mission was to close that loop: diagnose the system end to end, validate the diagnosis with
+        simulation, and deliver redesign concepts that addressed the root causes while remaining compatible with
+        manufacturing and assembly constraints.
+      </Para>
+      <Para>
+        The project followed a full <strong className="text-white">DMAIC cycle</strong>. Scope was restricted to the D5
+        variants (D5 LGP, D5 XL) and specifically to the tensioner group. The D4, D6, D7, John Deere 700L and Komatsu
+        D51 PX systems were used as benchmark references. Deliverables were 3D CAD redesigns validated in FEA, not
+        physical prototypes. Tools: Creo Parametric for CAD, ANSYS Mechanical for structural FEA, Python for data
+        processing.
+      </Para>
+
+      <Fig
+        src={`${BASE}/cat/13.png`}
+        caption="D5 track tensioner: cross section showing the main components involved in the failure modes (spring tube, piston, piston seal, retainer, cylinder, plug). Grease pressure acts on the piston base to tension the track; the plug seals the rear of the cylinder and is bolted to the housing."
+      />
+      <FigRow items={[{ src: `${BASE}/cat/14.png` }, { src: `${BASE}/cat/15.png` }]} sizeOverride="max-h-64 max-w-md" />
+
+      <Subsection title="Automated Failure Mode Classification of Warranty Reports" />
+      <Para>
+        Caterpillar maintains a centralised warranty database: every time a dealer repairs a machine under warranty,
+        they log the failed part, the machine hours, a short <em>comment</em> field and a longer <em>claim story</em>.
+        Filtering by the tensioner part numbers returned records{' '}
+        <strong className="text-white">in the order of thousands</strong>, a dataset large enough to make statistical
+        analysis meaningful, but far too large to read manually. The real obstacle was that dealers worldwide write in
+        their native language: English, German, Polish, Japanese, Spanish, sometimes with abbreviations and regional
+        shorthand. Per component <em>frequency</em> was easy to compute from the part number alone, but extracting the
+        actual <em>failure mode</em> from free text required something smarter.
+      </Para>
+      <Para>
+        My first attempt used the Gemini API: feed each concatenated{' '}
+        <code className="text-xs bg-white/10 px-1 rounded">comment + claim_story</code> to the model with a system
+        prompt asking it to pick one mode from a fixed list. It worked well, but every call sent customer written
+        warranty text to a third party server. Even though the raw text did not mention "Caterpillar" or part numbers,
+        sending it out over an API was not acceptable for this use case. Deploying a local LLM server (Ollama style)
+        would have solved the privacy issue but required IT approvals I was not going to get in time.
+      </Para>
+      <Para>
+        I pivoted to a lighter, fully local approach based on{' '}
+        <strong className="text-white">semantic similarity with Sentence-BERT</strong>. SBERT embeds a sentence into a
+        dense high dimensional vector whose geometry captures semantic meaning: two sentences expressing the same idea
+        in different words (or different languages) land close together. I embedded each of the eight candidate failure
+        modes (<em>grease leak, broken threads, detached part, loose part, broken/cracked part, corroded part, clogged,
+        damaged threads/grooves</em>) once, then embedded every claim story, and classified each one by the argmax of
+        cosine similarity:
+      </Para>
+      <EqBlock>{`\\mathrm{FM}(t) \\;=\\; \\arg\\max_i \\; \\frac{\\mathbf{v}_t \\cdot \\mathbf{v}_{\\mathrm{MD}_i}}{\\|\\mathbf{v}_t\\|\\,\\|\\mathbf{v}_{\\mathrm{MD}_i}\\|}`}</EqBlock>
+      <Para>
+        A similarity threshold was applied below which the case was marked null, so borderline or uninformative claim
+        stories would not pollute the statistics. The{' '}
+        <code className="text-xs bg-white/10 px-1 rounded">all-MiniLM-L6-v2</code> model runs comfortably on CPU and
+        handled the multilingual content well enough that manual translation was unnecessary. The entire pipeline ran on
+        my workstation, no data left the machine. I validated the output against 50 manually labelled samples and the
+        classifier hit <strong className="text-white">48/50 = 96% accuracy</strong>, which was well within acceptable
+        bounds for prioritisation work.
+      </Para>
+      <Para>
+        Crossing the resulting failure mode distribution with each component's warranty cost revealed a clear ranking of
+        critical failures: leakage at the piston/seal interface, leakage at the fill valve/cylinder interface, plug
+        loosening and cracking, and leakage at the relief valve interface. Equally striking was what the data{' '}
+        <em>did not</em> contain: zero reports of the intentional fuse system actuating, despite multiple plug cracking
+        cases. That contradiction became the focus of the next phase.
+      </Para>
+
+      <FigRow sizeOverride="max-h-[15.68rem] max-w-[23.52rem]" items={[{ src: `${BASE}/cat/19.png` }, { src: `${BASE}/cat/20.png` }]} />
+      <Fig sizeOverride="max-h-[21.6rem] max-w-[51.84rem]" src={`${BASE}/cat/21.png`}
+        caption="Failure mode distribution per component after automated classification of the warranty records. Grease leak dominates across seals, valves and plug." />
+
+      <Subsection title="FEA of the Fuse System: Why Plugs Were Cracking" />
+      <Para>
+        The tensioner is built with an intentional mechanical fuse: a deformable steel bar backed by an O ring,
+        designed to open a leak path <em>before</em> any other component reaches its yield limit. If the fuse was doing
+        its job, cracked plugs should not exist in the warranty record. They did. Something in the actual stress
+        response of the assembly was violating the intent of the design, and I needed an FEA model to find out what.
+      </Para>
+      <Para>
+        I built a coupled model of the fuse assembly in ANSYS Mechanical, applying grease pressure directly to the
+        internal surfaces and pretensioning the bolts and plug per the design drawings. The first version modelled the
+        O ring explicitly as a hyperelastic body, the theoretically correct choice. In practice the O ring deformation
+        became so large that mesh elements distorted past ANSYS's convergence tolerance, and the simulation crashed
+        above 24 pressure units, far below the regime of interest (130 to 250 units).
+      </Para>
+      <Para>
+        Rather than fight the solver with finer meshes and remeshing hacks, I reformulated the leak criterion{' '}
+        <em>geometrically</em>. Per the Parker O ring Handbook, an elastomeric seal is guaranteed to hold as long as
+        its compression exceeds 5.7%, and is guaranteed to leak below 0% (loss of contact). If I remove the O ring
+        from the simulation entirely and track the local vertical displacement{' '}
+        <Eq>{'d_{z,k}'}</Eq> of each node along the seal contour, I can compute a per node compression:
+      </Para>
+      <EqBlock>{`C_{\\%,k} \\;=\\; \\frac{t_o - t_{c,k}}{t_o}, \\qquad t_{c,k} = d_{z,k} + g_d`}</EqBlock>
+      <Para>
+        where <Eq>{'t_o'}</Eq> is the free O ring thickness and <Eq>{'g_d'}</Eq> is the gland depth. Aggregating over
+        all contour nodes gives <strong className="text-white">guaranteed sealing</strong> when{' '}
+        <Eq>{'\\min_k C_{\\%,k} > 5.7\\%'}</Eq> and{' '}
+        <strong className="text-white">certain leakage</strong> when{' '}
+        <Eq>{'\\overline{C_\\%} < 0\\%'}</Eq>. With the O ring removed, the model meshed cleanly and ran stable all
+        the way to plastic yield, while still producing a physically meaningful leak prediction. The model also exploited
+        the cylindrical symmetry of the assembly, halving the node count and the solve time.
+      </Para>
+      <Para>
+        The results were unambiguous. At roughly 130 pressure units, right around the maximum service pressure recorded
+        during bench testing, the plug threads reached 329 MPa, already above the 310 MPa yield limit of the material.
+        At that same pressure the fuse plate had barely deformed, and the O ring compression was still sitting around
+        20% everywhere along the contour. Even pushing the simulation all the way to 240 units, the fuse still would not
+        open a leak path. <strong className="text-white">The fuse was massively oversized and effectively inactive</strong>,
+        leaving the plug as the <em>de facto</em> weakest link, exactly consistent with the warranty record.
+      </Para>
+
+      <FigRow sizeOverride="max-h-[15.6rem] max-w-[31.2rem]" items={[{ src: `${BASE}/cat/30.png` }, { src: `${BASE}/cat/31.png` }]} />
+      <p className="-mt-2 mb-4 font-mono text-[0.62rem] tracking-wide text-white/35">
+        Von Mises stress in the fuse assembly at 130 pressure units. The plug threads reach 329 MPa (yield = 310 MPa)
+        while the fuse plate remains elastic; the fuse never triggers before plug failure.
+      </p>
+
+      <Subsection title="Fuse Resizing" />
+      <Para>
+        With the fuse proven ineffective, the cheapest corrective action was to keep the same topology but thin down the
+        plate until it actually deformed in the right pressure window. The desired window had clear bounds: seal reliably
+        above the 130 unit maximum service pressure, and leak reliably below the 220 unit cylinder yield pressure, a
+        90 unit band to work inside. (The plug itself is weaker than the cylinder, but its redesign was out of scope for
+        this sizing study; once the plug is redesigned to match the cylinder, the same curves still apply.)
+      </Para>
+      <Para>
+        I reran the simulation parametrically across four supplier standard plate thicknesses: 3, 3.5, 4 and 6 mm,
+        and for each one extracted the minimum and average O ring compression along the contact contour as pressure
+        ramped. As expected, thinner plates leak earlier and produce wider grey zone bands. The 6 mm plate essentially
+        replicated the current oversized behaviour; the 3 mm plate leaked too early, barely clearing the 130 unit
+        service ceiling.
+      </Para>
+
+      <Fig sizeOverride="max-h-[19.5rem] max-w-[46.8rem]" src={`${BASE}/cat/35.png`}
+        caption="O ring compression vs. pressure for each plate thickness. Grey bands mark the transition between guaranteed sealing (min C% > 5.7%) and certain leakage (avg C% < 0%)." />
+
+      <Para>
+        The <strong className="text-white">3.5 mm plate</strong> was the clean answer: guaranteed sealing up to around
+        160 units (comfortably above 130) and guaranteed leakage by around 180 units (comfortably below 220). Part cost
+        stayed negligible since the geometry is still a simple stamped plate. One important limitation worth flagging:
+        this fuse is designed for static or quasi-static overpressure. A sudden pressure spike, for example a hard
+        idler impact, would require a much higher mass flow evacuation path than the small opening produced by plate
+        deformation. For that failure mode a proper relief valve is the right tool, and that informed the concept level
+        redesign.
+      </Para>
+
+      <Subsection title="Redesign Concepts and Pugh Matrix Selection" />
+      <Para>
+        Three full CAD redesigns were developed in Creo Parametric, each informed by both the warranty analysis and a
+        benchmark of the John Deere 700L, Komatsu D51 PX, and CAT D4/D7/TTL tensioners. The recurring themes across
+        successful competitor designs were consistent: welded (not threaded) cylinder assembly to eliminate the
+        fill valve leak path, chromed or sleeved piston cylinder interface to prevent wear induced seal failure,
+        oil based lubrication of the sliding contact, a positive mechanical alignment between cylinder and frame, and a
+        proper relief valve as the overpressure safety device rather than a deformable bar.
+      </Para>
+      <Para>
+        Concept 1 focused on a perfect guidance architecture: spherical joint at the piston end, a
+        spacer and sleeve retainer providing two line contacts against a precision machined cylinder, and an
+        interconnected oil chamber lubricating both interfaces. Concept 2 was inspired directly by the John Deere 700L:
+        a two piece welded cylinder, a resized fuse plate from the sizing study, and a guide hole catching the piston
+        if the chain goes slack. Concept 3 took a different route: it integrates the cylinder body directly into the
+        mobile portion of the TRF, uses a two level alignment (ball joint at one end, pin in hole at the other) that
+        makes the subassembly essentially self aligning under its own weight during installation, and keeps both valves
+        accessible without modifying the TRF hatch door.
+      </Para>
+      <Para>
+        The three concepts were scored against eight criteria in a Pugh matrix using the current D5 as the reference:
+        cost, intrusiveness on the existing design, serviceability, operator safety, ease of assembly, behaviour under
+        chain loose scenarios, fuse robustness, and manufacturability. The matrix was intentionally kept qualitative;
+        weighting the criteria with specific numerical coefficients would have introduced arbitrary bias given that
+        several criteria (assembly ease especially) were the blocking constraints.
+      </Para>
+      <Para>
+        <strong className="text-white">Concept 3 was selected.</strong> It scored positively on cost, serviceability,
+        manufacturability, intrusiveness and chain loose guidance; neutral on assembly ease, where its self aligning
+        geometry directly addresses what had been the single biggest pain point. Concept 2 was blocked by severe
+        assembly difficulty inside the cramped TRF, and Concept 1 offered no clear advantage over the reference.
+        Concept 3 is now positioned for physical prototyping and bench validation, the remaining step in the DMAIC
+        Control phase.
+      </Para>
+
+      {/* Concept cards: each concept's images contained in one uniform rectangle, laid out horizontally */}
+      <div className="flex flex-col gap-6 items-center my-4">
+        {[
+          { label: 'Concept 1', imgs: [`${BASE}/cat/37.png`, `${BASE}/cat/38.png`, `${BASE}/cat/39.png`] },
+          { label: 'Concept 2', imgs: [`${BASE}/cat/40.png`, `${BASE}/cat/41.png`, `${BASE}/cat/42.png`] },
+          { label: 'Concept 3', imgs: [`${BASE}/cat/43.png`, `${BASE}/cat/44.png`, `${BASE}/cat/45.png`] },
+        ].map(concept => (
+          <div key={concept.label} className="w-full max-w-[72.8rem] rounded-md bg-black/30 border border-white/10 overflow-hidden">
+            <div className="flex justify-center">
+              {concept.imgs.map(src => (
+                <div key={src} className="border-r border-white/10 last:border-0 h-[19.5rem] bg-black/20 flex items-center justify-center">
+                  <img src={src} alt="" className="h-full w-auto object-contain" />
+                </div>
+              ))}
+            </div>
+            <p className="py-2 text-center font-mono text-[0.62rem] tracking-wide text-white/35">{concept.label}</p>
+          </div>
+        ))}
+      </div>
+
+      <Outcome accent="#E8A020" title="Key Outcomes">
+        <ul className="space-y-1">
+          <li>· 684 multilingual warranty reports classified automatically at <strong className="text-white">96% accuracy</strong> with a local SBERT pipeline (no data leaves the machine).</li>
+          <li>· FEA with a geometric leak criterion proved the existing fuse never activates, and identified the plug as the real failure point, matching field data exactly.</li>
+          <li>· Resized fuse plate (3.5 mm) delivers a clean pressure window: seals up to ~160, leaks by ~180, well inside the 130 to 220 safety band.</li>
+          <li>· Concept 3 selected via Pugh matrix, addressing all four critical failure modes identified upstream and ready for prototyping.</li>
+        </ul>
+      </Outcome>
+    </>
+  );
+}
+
+// ─── Personal Studies content ─────────────────────────────────────────────────
+
+function CombustionContent() {
+  return (
+    <>
+      {/* Study 1 */}
+      <Subsection title="Study 1: Optimisation of Regenerative Cooling in a Combustion Chamber" />
+
+      <Subsubsection title="Context" />
+      <Para>
+        During operation, rocket engines, particularly the combustion chamber, are subjected to extremely high
+        temperatures. As temperature increases, the mechanical properties of metals degrade, most notably their yield
+        strength. To address this issue, two methods exist for controlling the temperature of the chamber:
+      </Para>
+      <ul className="text-sm text-white/65 space-y-1.5 mb-3 pl-4">
+        <li><strong className="text-white">Ablative cooling:</strong> involves the gradual erosion of the inner chamber
+          walls, carrying away heat in the process. However, this method is destructive and assumes the engine will not
+          be reused.</li>
+        <li><strong className="text-white">Regenerative cooling:</strong> the most commonly used method. It works by
+          circulating a cryogenic fluid through channels machined into the combustion chamber wall, enabling efficient
+          heat dissipation.</li>
+      </ul>
+
+      <Subsubsection title="Study Objective" />
+      <Para>
+        Evaluate the effect of varying the width <Eq>{'L'}</Eq> and height <Eq>{'H'}</Eq> of straight cooling channels
+        on the maximum temperature of the inner combustion chamber wall. The objective is to find an optimum with the
+        maximum inner wall temperature as the objective function and <Eq>{'L'}</Eq> and <Eq>{'H'}</Eq> as optimisation
+        variables, with:
+      </Para>
+      <ul className="text-sm text-white/65 space-y-1 mb-3 pl-4">
+        <li><Eq>{'L'}</Eq> between 0.8 and 3.0 mm</li>
+        <li><Eq>{'H'}</Eq> between 1.5 and 5.0 mm</li>
+        <li>Wall thickness kept constant at 10 mm</li>
+        <li>Distance between the channel and the inner wall kept constant at 3 mm</li>
+      </ul>
+
+      <Fig sizeOverride="max-h-[21rem] max-w-[33.6rem]" src={`${BASE}/image43.jpg`}
+        caption="Cooling channel design (CAD assembly of combustion chamber + nozzle)" />
+
+      <Subsubsection title="Study Parameters" />
+      <DataTable
+        caption="Simulation parameters"
+        head={['Parameter', 'Value']}
+        rows={[
+          ['Fuel/oxidizer', 'Methane/liquid oxygen'],
+          ['Inner wall material', 'CuAgZr'],
+          ['O₂/fuel mixture ratio', '3.6'],
+          ['Chamber pressure (MPa)', '3'],
+          ['Coolant', 'N₂ (liquid nitrogen)'],
+          ['Coolant mass flow rate (kg/s)', '1.5'],
+          ['Coolant inlet temperature (K)', '70'],
+          ['Contraction/expansion ratio', '9/5.5'],
+          ['Wall thickness (mm)', '10'],
+          ['Channel to wall margin thickness (mm)', '3'],
+          ['Throat diameter (m)', '0.0274'],
+        ]}
+      />
+
+      <Subsubsection title="Execution" />
+      <Para>
+        Initially, the simulation was carried out with an inner wall thickness, cooling channel width, and height of
+        1 mm, 1.8 mm, and 3.5 mm, respectively.
+      </Para>
+      <Para>
+        The mesh was generated with inflation layers at the boundary layer of the combustion chamber to capture
+        temperature and velocity gradients, and similarly for the cooling channels. A mesh of the solid region was also
+        generated.
+      </Para>
+
+      <Fig sizeOverride="max-h-[32rem] max-w-[44.8rem]" src={`${BASE}/image44.jpg`} caption="Fluid + solid zone mesh" />
+
+      <Para>After simulation in ANSYS Fluent + ANSYS Thermal, the following results were obtained:</Para>
+
+      <DataTable
+        caption="Thermal data of the gas in the combustion chamber at selected cross sections"
+        head={['Axial position (mm)', 'Temp. (K)', 'γ', 'Mach', 'Viscosity (10⁻⁴ Pa·s)', 'Cp (J/mol·K)', 'Pr']}
+        rows={[
+          ['0', '3448.78', '1.1251', '0', '1.1437', '2278.4', '0.5649'],
+          ['20.5', '3442.70', '1.1250', '0.192', '1.1422', '2278.0', '0.5651'],
+          ['47.3', '3287.31', '1.1213', '1.000', '1.1040', '2267.5', '0.5716'],
+          ['79.8', '2783.91', '1.1125', '2.332', '0.9785', '2225.3', '0.5940'],
+          ['111.64', '2648.67', '1.1122', '2.635', '0.9444', '2210.7', '0.6000'],
+        ]}
+      />
+
+      <Fig sizeOverride="max-h-[32rem] max-w-[44.8rem]" src={`${BASE}/image49.png`}
+        caption="Temperature distribution in the combustion chamber wall (cross section taken between two channels)" />
+
+      <Para>
+        The temperature peak is reached just before the narrowest cross section, near the contraction zone of the
+        chamber throat.
+      </Para>
+      <Para>
+        After varying parameters <Eq>{'L'}</Eq> and <Eq>{'H'}</Eq> in increments of 0.01 mm (between 1.5 and 5.0 mm
+        for height and 0.8 and 3.0 mm for width), the following results were obtained:
+      </Para>
+
+      <Fig sizeOverride="max-h-[21rem] max-w-[33.6rem]" src={`${BASE}/image50.png`}
+        caption="Maximum combustion chamber temperature as a function of L and H" />
+
+      <Subsubsection title="Conclusion" />
+      <Outcome accent="#C9A96A" title="Optimal Result">
+        <Para>
+          The optimum is reached at <Eq>{'H = 5\\ \\text{mm}'}</Eq> and <Eq>{'L = 0.8\\ \\text{mm}'}</Eq>, with a
+          minimum temperature of <strong className="text-white">586.6 K</strong>.
+        </Para>
+      </Outcome>
+      <Para>
+        <strong className="text-white">Interpretation:</strong> When the channel width is increased, the coolant absorbs
+        a large amount of heat at the inlet of the combustion chamber due to the large exchange surface area, in a
+        region where its effect is not fully needed. By the time it reaches the chamber throat, where temperatures are
+        highest, the coolant has already reached a significant temperature, reducing its ability to absorb heat
+        efficiently.
+      </Para>
+      <Para>
+        Reducing the width while increasing the height allows the mass flow rate to be kept constant and delays heat
+        absorption until the throat, where it is most needed.
+      </Para>
+
+    </>
+  );
+}
+
+function StarshipContent() {
+  return (
+    <>
+      <Para>
+        Being a great fan of the <strong className="text-white">Starship</strong> rocket project led by SpaceX, I have
+        been closely following its development in detail since 2019. One of the major phases of this development is
+        pressure testing of the LOX (liquid oxygen) and methane tanks.
+      </Para>
+      <Para>
+        The goal is to fill the tank with cryogenic liquid nitrogen and increase the internal pressure until rupture,
+        in order to analyse the failure mode. Anticipating this test and having access to a tank drawing published
+        online by an employee, including dimensions and sheet thickness, I reconstructed the tank geometry and
+        performed a hydrostatic pressure simulation to attempt to predict the failure zone and the critical pressure
+        using the finite element method.
+      </Para>
+
+      <Fig large src={`${BASE}/image51.png`} caption="FEA simulation and failure zone prediction" />
+
+      <Outcome accent="#4CAF50" title="Results">
+        <ul className="space-y-1">
+          <li><strong className="text-white">Actual tank failure pressure:</strong> 7.6 bar</li>
+          <li><strong className="text-white">Predicted failure pressure:</strong> 8.1 bar</li>
+          <li><strong className="text-white">Difference:</strong> Likely due to temperature being higher in the actual
+            tests (the ultimate strength of stainless steel increases as temperature decreases).</li>
+          <li><strong className="text-white">Failure zone:</strong> Predicted by the red zone (maximum stress). In the
+            actual test, failure occurred exactly in the zone predicted by the finite element method: at the end of the
+            arc and beginning of the linear section.</li>
+        </ul>
+      </Outcome>
+      <Para>
+        Watching the test live and accurately predicting the exact failure zone was particularly striking and validated
+        the simulation approach used.
+      </Para>
+    </>
+  );
+}
+
+function LQRContent() {
+  return (
+    <>
+      <Subsubsection title="Context" />
+      <Para>
+        A traditional rocket is thrown away after a single flight: the equivalent of scrapping a commercial aircraft
+        after every trip. SpaceX changed this by landing their boosters propulsively: using the rocket's own engines
+        to decelerate and return it to the launch site, where it can be refuelled and flown again. This is what drives
+        their cost advantage. Starship's Super Heavy booster goes further: it is caught mid air by two mechanical
+        arms on the launch tower, since a booster of that size landing on legs would be structurally impractical.
+      </Para>
+      <Para>
+        Making this work is a flight software problem. The booster is an inherently unstable system; it naturally
+        tips over. Its engines can be gimballed (their thrust direction tilted), and the flight software must
+        coordinate those gimbal angles in real time, at every millisecond, to simultaneously control where the vehicle
+        is going and how it is oriented. An uncorrected error compounds faster than a human could react.
+      </Para>
+      <Para>
+        This project builds that flight software from scratch. A 6 DOF rigid body simulator acts as the virtual
+        rocket, it takes engine commands and propagates the full physical state of the vehicle forward in time.
+        An LQR full state feedback controller reads that state, computes the optimal gimbal angles and thrust for each
+        engine, and sends the commands back. Closing this loop is called a Software in the Loop (SIL) simulation:
+        the standard method for validating flight software before it ever runs on real hardware.
+      </Para>
+
+      <div className="grid grid-cols-2 gap-4 my-5">
+        <div className="flex flex-col items-center gap-2">
+          <div className="rounded-md overflow-hidden">
+            <video
+              src="/ali-portfolio/images-videos/booster-catch-real.mp4"
+              className="h-96 w-auto max-w-full"
+              autoPlay
+              playsInline
+              loop
+              muted
+            />
+          </div>
+          <p className="text-center font-mono text-[0.62rem] tracking-wide text-white/35">Super Heavy booster caught by Mechazilla, 13 Oct 2024</p>
+        </div>
+        <div className="flex flex-col items-center gap-2">
+          <div className="rounded-md overflow-hidden">
+            <video
+              src="/ali-portfolio/images-videos/booster-catch-sim.mp4"
+              className="h-96 w-auto max-w-full"
+              autoPlay
+              playsInline
+              loop
+              muted
+              ref={el => { if (el) el.playbackRate = 1.1; }}
+            />
+          </div>
+          <p className="text-center font-mono text-[0.62rem] tracking-wide text-white/35">6 DOF LQR simulation: Go to Setpoint manoeuvre</p>
+        </div>
+      </div>
+      <div className="flex justify-center mt-6 mb-3">
+        <p className="text-sm font-light text-white/50">The simulation runs live in your browser, no install needed.</p>
+      </div>
+      <div className="flex justify-center mb-8">
+        <Link to="/rocketDemo" className="btn btn-primary">
+          <ExternalLink className="h-4 w-4" />
+          <span>Launch demo</span>
+        </Link>
+      </div>
+
+      <Subsubsection title="Objective" />
+      <Para>
+        The goal is to develop and validate, in simulation, the full guidance and control stack for a propulsively
+        landing rocket stage. This requires two things built in tandem: a numerically reliable 6 DOF rigid body
+        integrator that serves as the virtual vehicle, and an LQR full state feedback controller that commands it.
+        Neither is useful without the other: the integrator needs a controller to drive it to a meaningful scenario,
+        and the controller needs a physics accurate plant to be tested against. The two are developed and unit tested
+        separately, then connected in a Software in the Loop (SIL) simulation that validates closed loop behaviour at
+        flight realistic update rates. The three parts below follow that order: first the integrator, then the
+        controller, then the integration that ties them together.
+      </Para>
+      <Para>
+        Full implementation:{' '}
+        <a href="https://github.com/floaty-bone/rocket-integrator" target="_blank" rel="noreferrer"
+          className="text-[#C9A96A] hover:underline">
+          github.com/floaty-bone/rocket-integrator
+        </a>
+        {' · '}
+        <Link to="/rocketDemo" className="inline-flex items-center gap-1 text-[#C9A96A] hover:underline">
+          <ExternalLink className="w-3 h-3" />launch demo
+        </Link>
+      </Para>
+
+      {/* ── Part 1: the integrator ── */}
+      <Subsection title="Part 1: The 6 DOF Rigid Body Integrator (RK4)" />
+      <Para>
+        The integrator makes no concessions to simplicity: no linearisation, no small angle assumption, no analytical
+        shortcut. It propagates the full nonlinear state forward in time using a fourth order Runge Kutta scheme at
+        submillisecond resolution, and must remain numerically stable over the full duration of a landing manoeuvre.
+      </Para>
+
+      <Subsubsection title="State Representation" />
+      <Para>
+        The state of the rigid body is encoded in a 13-element vector:
+      </Para>
+      <EqBlock>{`\\mathbf{s} = \\bigl[\\,\\underbrace{x,\\,y,\\,z}_{\\text{position}},\\;\\underbrace{q_w,\\,q_x,\\,q_y,\\,q_z}_{\\text{attitude}},\\;\\underbrace{v_x,\\,v_y,\\,v_z}_{\\text{velocity}},\\;\\underbrace{\\omega_x,\\,\\omega_y,\\,\\omega_z}_{\\text{angular velocity}}\\,\\bigr]`}</EqBlock>
+      <Para>
+        Attitude is represented by a unit quaternion rather than Euler angles. This eliminates gimbal lock entirely and
+        keeps the kinematics well conditioned at every orientation, including when the body undergoes large rotations.
+      </Para>
+
+      <Subsubsection title="Equations of Motion" />
+      <Para>
+        The state derivative <Eq>{'\\dot{\\mathbf{s}}'}</Eq> is assembled from four coupled equations evaluated at
+        each integration step.
+      </Para>
+      <p className="text-sm text-white/80 font-medium mt-3 mb-1">Position kinematics.</p>
+      <EqBlock>{`\\dot{\\mathbf{r}} = \\mathbf{v}`}</EqBlock>
+      <p className="text-sm text-white/80 font-medium mt-3 mb-1">Quaternion kinematics.</p>
+      <Para>The attitude evolves according to:</Para>
+      <EqBlock>{`\\dot{\\mathbf{q}} = \\frac{1}{2}\\,\\Omega(\\boldsymbol{\\omega})\\,\\mathbf{q}`}</EqBlock>
+      <Para>
+        where <Eq>{'\\Omega(\\boldsymbol{\\omega})'}</Eq> is the{' '}
+        <Eq>{'4\\times4'}</Eq> skew symmetric matrix constructed from the body frame angular velocity:
+      </Para>
+      <EqBlock>{`\\Omega(\\boldsymbol{\\omega}) =
+\\begin{pmatrix}
+ 0        & -\\omega_x & -\\omega_y & -\\omega_z \\\\
+ \\omega_x &  0        &  \\omega_z & -\\omega_y \\\\
+ \\omega_y & -\\omega_z &  0        &  \\omega_x \\\\
+ \\omega_z &  \\omega_y & -\\omega_x &  0
+\\end{pmatrix}`}</EqBlock>
+      <p className="text-sm text-white/80 font-medium mt-3 mb-1">Translational dynamics.</p>
+      <Para>Newton's second law in the inertial frame:</Para>
+      <EqBlock>{`\\dot{\\mathbf{v}} = \\frac{1}{m}\\,\\mathbf{R}(\\mathbf{q})\\,\\mathbf{F}_{\\text{body}} + \\mathbf{g}`}</EqBlock>
+      <Para>
+        where <Eq>{'\\mathbf{R}(\\mathbf{q})'}</Eq> is the rotation matrix from body frame to inertial frame, derived
+        directly from the quaternion:
+      </Para>
+      <EqBlock>{`\\mathbf{R}(\\mathbf{q}) =
+\\begin{pmatrix}
+1 - 2(q_y^2+q_z^2)   & 2(q_xq_y - q_wq_z) & 2(q_xq_z + q_wq_y) \\\\
+2(q_xq_y + q_wq_z)   & 1 - 2(q_x^2+q_z^2) & 2(q_yq_z - q_wq_x) \\\\
+2(q_xq_z - q_wq_y)   & 2(q_yq_z + q_wq_x) & 1 - 2(q_x^2+q_y^2)
+\\end{pmatrix}`}</EqBlock>
+      <p className="text-sm text-white/80 font-medium mt-3 mb-1">Rotational dynamics.</p>
+      <Para>Euler's rotation equation in the body frame:</Para>
+      <EqBlock>{`\\dot{\\boldsymbol{\\omega}} = \\mathbf{I}^{-1}\\bigl(\\mathbf{M} - \\boldsymbol{\\omega}\\times(\\mathbf{I}\\,\\boldsymbol{\\omega})\\bigr)`}</EqBlock>
+      <Para>
+        The term <Eq>{'\\boldsymbol{\\omega}\\times(\\mathbf{I}\\,\\boldsymbol{\\omega})'}</Eq> is the gyroscopic term.
+        It accounts for the redistribution of angular momentum between axes whenever the angular velocity vector is not
+        aligned with a principal axis of inertia. It is this term that governs all nontrivial rotational behaviour.
+      </Para>
+
+      <Subsubsection title="The RK4 Scheme" />
+      <Para>
+        The four equations above are bundled into a single state derivative function{' '}
+        <Eq>{'f(\\mathbf{s})'}</Eq>. The classical fourth order Runge Kutta method advances the state by one
+        time step <Eq>{'h'}</Eq>:
+      </Para>
+      <EqBlock>{`\\begin{aligned}
+\\mathbf{k}_1 &= f(\\mathbf{s}_n) \\\\
+\\mathbf{k}_2 &= f\\!\\left(\\mathbf{s}_n + \\tfrac{h}{2}\\,\\mathbf{k}_1\\right) \\\\
+\\mathbf{k}_3 &= f\\!\\left(\\mathbf{s}_n + \\tfrac{h}{2}\\,\\mathbf{k}_2\\right) \\\\
+\\mathbf{k}_4 &= f\\!\\left(\\mathbf{s}_n + h\\,\\mathbf{k}_3\\right) \\\\[6pt]
+\\mathbf{s}_{n+1} &= \\mathbf{s}_n + \\frac{h}{6}\\bigl(\\mathbf{k}_1 + 2\\mathbf{k}_2 + 2\\mathbf{k}_3 + \\mathbf{k}_4\\bigr)
+\\end{aligned}`}</EqBlock>
+      <Para>
+        The local truncation error is <Eq>{'\\mathcal{O}(h^5)'}</Eq>, giving a global error of{' '}
+        <Eq>{'\\mathcal{O}(h^4)'}</Eq>. At <Eq>{'h = 1\\,\\text{ms}'}</Eq>, this is more than sufficient for the
+        dynamics of interest.
+      </Para>
+      <Para>
+        <strong className="text-white">Numerical reliability.</strong> Two measures preserve long-term accuracy. The
+        inverse inertia tensor <Eq>{'\\mathbf{I}^{-1}'}</Eq> is computed once at initialisation and cached, avoiding
+        repeated matrix factorisation at every step. The quaternion is renormalised after every step to prevent slow
+        numerical drift from corrupting the attitude representation:
+      </Para>
+      <EqBlock>{`\\mathbf{q} \\leftarrow \\frac{\\mathbf{q}}{\\|\\mathbf{q}\\|}`}</EqBlock>
+
+      <Subsubsection title="A Fun Observation: the Intermediate Axis Theorem" />
+      <Para>
+        Once the integrator was running, the inertia tensor was set to three distinct principal moments,{' '}
+        <Eq>{'I_1 = 300'}</Eq>, <Eq>{'I_2 = 100'}</Eq>, <Eq>{'I_3 = 30\\,\\text{kg}\\cdot\\text{m}^2'}</Eq>, and the
+        body was given an initial angular velocity nearly aligned with the intermediate axis, with a small perturbation
+        on the other two. The gyroscopic term in Euler's equation then drives the system into an unstable regime: the
+        Dzhanibekov effect. The body undergoes periodic half turns and realigns, indefinitely. The real time 3D
+        animation made this directly visible, which is something no closed form solution could have offered as clearly.
+      </Para>
+
+      {/* ── Part 2: the controller ── */}
+      <Subsection title="Part 2: The LQR Controller" />
+      <Para>
+        An LQR (Linear Quadratic Regulator) is a full state feedback controller: it multiplies the current state error
+        by a precomputed gain matrix <Eq>{'\\mathbf{K}'}</Eq> to produce the control command that optimally balances how
+        quickly the error is driven to zero against how much actuator effort is spent. The gain is computed from a
+        tangent space linearisation of the 6-DOF dynamics, and is what turns the raw simulator into a controllable
+        vehicle.
+      </Para>
+
+      <Subsubsection title="Linearisation and Gain Computation" />
+      <Para>
+        LQR is, by definition, a linear law: it is exact only at the operating point{' '}
+        <Eq>{'(\\mathbf{s}_{\\text{op}},\\mathbf{u}_{\\text{op}})'}</Eq> where the Jacobians{' '}
+        <Eq>{'A=\\partial f/\\partial\\mathbf{s}'}</Eq> and{' '}
+        <Eq>{'B=\\partial f/\\partial\\mathbf{u}'}</Eq> were taken. The vehicle dynamics are strongly nonlinear
+        (<Eq>{'\\mathbf{R}(\\mathbf{q})'}</Eq>, gyroscopic coupling,{' '}
+        <Eq>{'\\boldsymbol{\\omega}\\times(\\mathbf{I}\\boldsymbol{\\omega})'}</Eq>), so the operating point must be
+        refreshed along the trajectory. At each refresh, <Eq>{'A'}</Eq> and <Eq>{'B'}</Eq> are recomputed by JAX
+        auto differentiation of the dynamics function around the current <Eq>{'(\\mathbf{s},\\mathbf{u})'}</Eq>, and a
+        new gain <Eq>{'\\mathbf{K}'}</Eq> is obtained by solving the continuous time algebraic Riccati equation:
+      </Para>
+      <EqBlock>{`A^\\top P + P A - P B R^{-1} B^\\top P + Q = 0,
+\\qquad
+\\mathbf{K} = R^{-1} B^\\top P`}</EqBlock>
+
+      <Subsubsection title="Thrust Vector Control Encoding" />
+      <Para>
+        Internally the LQR computes thrust as a Cartesian force vector{' '}
+        <Eq>{'[F_x, F_y, F_z]'}</Eq> per engine, which is the natural form for an affine state space formulation. The
+        real vehicle, however, commands two gimbal angles and a thrust magnitude per engine. The controller therefore
+        converts its Cartesian solution into the <Eq>{'[\\alpha,\\,\\beta,\\,T]'}</Eq> form an actuator actually
+        receives, via the forward and inverse trigonometric mapping:
+      </Para>
+      <EqBlock>{`\\begin{aligned}
+F_x &= T\\cos\\alpha\\cos\\beta \\\\
+F_y &= T\\cos\\alpha\\sin\\beta \\\\
+F_z &= -T\\sin\\alpha
+\\end{aligned}
+\\qquad
+\\begin{aligned}
+T     &= \\sqrt{F_x^2+F_y^2+F_z^2} \\\\
+\\alpha &= -\\arcsin\\!\\bigl(F_z/T\\bigr) \\\\
+\\beta  &= \\operatorname{atan2}(F_y,\\,F_x)
+\\end{aligned}`}</EqBlock>
+
+      {/* ── Part 3: SIL integration & results ── */}
+      <Subsection title="Part 3: Software in the Loop Integration and Results" />
+      <Para>
+        The integrator and controller are developed and unit tested in isolation; neither result says anything about
+        closed loop behaviour. The Software in the Loop (SIL) simulation closes the loop: at every controller tick,
+        the gain <Eq>{'\\mathbf{K}'}</Eq> is applied to the live plant state, the resulting actuator command is fed
+        back into the RK4 integrator, and the new state is fed back into the controller. The purpose is to validate
+        that the LQR law, relinearised periodically along the trajectory, actually stabilises the full nonlinear
+        vehicle from a nontrivial initial attitude to a target setpoint.
+      </Para>
+
+      <Subsubsection title="Architecture" />
+      <Para>
+        The SIL is built as two decoupled blocks exchanging a strictly defined interface. This boundary is the SIL
+        contract: the controller block knows nothing about the integrator, the plant block knows nothing about the gain
+        matrix, and the bus between them carries only signals that would exist on the real vehicle.
+      </Para>
+      <Para><strong className="text-white">Controller block.</strong></Para>
+      <ul className="text-sm text-white/65 space-y-1 mb-3 pl-4">
+        <li><strong className="text-white">Input:</strong> current state <Eq>{'\\mathbf{s}\\in\\mathbb{R}^{13}'}</Eq>, target setpoint <Eq>{'\\mathbf{s}^\\star\\in\\mathbb{R}^{13}'}</Eq>.</li>
+        <li><strong className="text-white">Output:</strong> TVC command <Eq>{'\\mathbf{u}_{\\text{gimbal}}\\in\\mathbb{R}^{9}'}</Eq>, encoded as <Eq>{'[\\alpha,\\,\\beta,\\,T]'}</Eq> per engine.</li>
+      </ul>
+      <Para><strong className="text-white">Plant block.</strong></Para>
+      <ul className="text-sm text-white/65 space-y-1 mb-3 pl-4">
+        <li><strong className="text-white">Input:</strong> current state <Eq>{'\\mathbf{s}\\in\\mathbb{R}^{13}'}</Eq>, TVC command <Eq>{'\\mathbf{u}_{\\text{gimbal}}\\in\\mathbb{R}^{9}'}</Eq>.</li>
+        <li><strong className="text-white">Output:</strong> next state <Eq>{'\\mathbf{s}^+\\in\\mathbb{R}^{13}'}</Eq>, computed by one RK4 step.</li>
+      </ul>
+      <Para>
+        The crucial design choice is the bus variable. Although the controller solves internally in Cartesian forces,
+        the bus carries the <Eq>{'[\\alpha,\\,\\beta,\\,T]'}</Eq> gimbal command, the same signal the real vehicle
+        receives. Routing it across the SIL boundary forces the simulation to exercise the same trigonometric mapping
+        shown above, so any singularity, saturation, or precision loss in that mapping appears in closed loop, not as
+        a hidden internal quantity.
+      </Para>
+
+      <Subsubsection title="Multi Rate Scheduling" />
+      <Para>
+        A real flight stack does not run every block at the same frequency, and the SIL reproduces that. Three
+        independent rates are scheduled inside a single loop:
+      </Para>
+      <DataTable
+        caption="Scheduled rates inside the SIL loop"
+        head={['Block', 'Rate', 'Justification']}
+        rows={[
+          ['RK4 integration', '8000 Hz', 'h = 0.125 ms, global error O(h⁴)'],
+          ['Controller update', '5000 Hz', 'Realistic upper bound for an embedded LQR'],
+          ['LQR relinearisation', '30 Hz', 'JAX auto diff of f(s,u) and Riccati solve'],
+        ]}
+      />
+      <Para>
+        The relinearisation rate is the load bearing parameter. Because the LQR gain is only valid near its operating
+        point and the dynamics are strongly nonlinear, the linearisation must be refreshed along the trajectory,
+        here at 30 Hz. Between refreshes, the controller applies the cached <Eq>{'\\mathbf{K}'}</Eq> at the full 5 kHz
+        rate; the cost stays in the affordable range while the linearisation stays close enough to the trajectory to
+        remain valid.
+      </Para>
+
+      <Subsubsection title="Test Scenario" />
+      <Para>
+        The vehicle is a 120-tonne stage with three gimballed engines clustered at radius{' '}
+        <Eq>{'a = 1.5\\,\\text{m}'}</Eq>, mounted <Eq>{'l = 18\\,\\text{m}'}</Eq> below the centre of mass, with
+        inertia{' '}
+        <Eq>{'\\operatorname{diag}(1.2\\times10^6,\\,3.5\\times10^7,\\,3.5\\times10^7)\\,\\text{kg}\\cdot\\text{m}^2'}</Eq>.
+        Initial attitude is horizontal <Eq>{'(\\theta = -\\pi/2)'}</Eq> at the origin, with zero linear and angular
+        velocity. The setpoint asks for a translation to{' '}
+        <Eq>{'(50,\\,100,\\,60)\\,\\text{m}'}</Eq> while holding the same horizontal attitude. The nominal thrust per
+        engine is the static hover share, <Eq>{'mg/3'}</Eq>.
+      </Para>
+      <Para>
+        The LQR weights penalise position error heavily (<Eq>{'Q_{\\text{pos}} = 10^7'}</Eq>) and linear velocity
+        moderately (<Eq>{'Q_v = 10^5'}</Eq>); attitude and angular rate weights are kept low enough to let the
+        controller redistribute thrust freely. The control cost <Eq>{'R = I_9'}</Eq> is uniform across the nine
+        actuator channels.
+      </Para>
+
+      <Subsubsection title="Results" />
+      <Para>
+        The closed loop converges. The vehicle drives all three position channels onto their setpoint with no
+        steady state offset and no oscillation past the transient. The TVC commands stay inside physically sensible
+        bounds: gimbal angles in the low degree range, per engine thrust modulating around the hover share. The final
+        quaternion norm, after 30 seconds at 8 kHz (<Eq>{'2.4 \\times 10^5'}</Eq> RK4 steps), is within{' '}
+        <Eq>{'10^{-8}'}</Eq> of unity, confirming that the per step renormalisation of the integrator holds up over
+        the full SIL horizon.
+      </Para>
+      <Para>
+        The most useful diagnostic is the disagreement curve between the controller's internal Cartesian command and
+        the gimbal encoded command actually delivered to the plant. The two are mathematically inverse on paper; in the
+        SIL they round trip through floating point, so any divergence flags either a singularity in the{' '}
+        <Eq>{'[\\alpha,\\beta,T]'}</Eq> chart or a saturation in the controller. Across the test scenario the
+        disagreement stays at machine precision, which is the strongest possible statement that the SIL boundary is
+        exercised cleanly and the controller never asks for a command the real vehicle could not execute.
+      </Para>
+
+      <Outcome accent="#C9A96A" title="Key Outcomes">
+        <ul className="space-y-1">
+          <li>· Full 6 DOF rigid body propagation with quaternion kinematics and no gimbal lock; fourth order Runge Kutta at <Eq>{'h = 1\\,\\text{ms}'}</Eq>, global error <Eq>{'\\mathcal{O}(h^4)'}</Eq>, with per step quaternion renormalisation against long term drift.</li>
+          <li>· Numerical reproduction of the Dzhanibekov effect: rotation about the intermediate inertia axis is unstable and the simulator captures it exactly.</li>
+          <li>· LQR relinearised on trajectory via JAX auto diff and Riccati solve, no hand derived Jacobians; SIL boundary carries <Eq>{'[\\alpha,\\beta,T]'}</Eq>, the real TVC command, not internal Cartesian forces.</li>
+          <li>· Closed loop validation across the full SIL boundary at flight realistic rates (5 kHz control, 8 kHz plant, 30 Hz relinearisation), converging from a horizontal initial attitude to a 3 axis position setpoint with quaternion norm preserved to <Eq>{'10^{-8}'}</Eq> after <Eq>{'2.4\\times10^5'}</Eq> integration steps.</li>
+        </ul>
+      </Outcome>
+    </>
+  );
+}
+
+function CanardContent() {
+  return (
+    <>
+      <Subsubsection title="Context" />
+      <Para>
+        A friend of mine has been designing a concept aerobatic turboprop in SolidWorks: a Red Bull Air Race form
+        factor inspired by the Extra 330, with a Garrett TPE331 up front. One of the defining design intents of the
+        aircraft is that the wing's lift surface must remain <strong className="text-white">completely
+        uninterrupted</strong>: no ailerons, no flaps, no control surfaces of any kind on the wing. Whatever control
+        inputs the pilot applies, the wing keeps producing clean, undisturbed lift. That decision pushes roll control
+        somewhere else on the airframe, and that is the module I took ownership of: the{' '}
+        <strong className="text-white">fixed main landing gear that doubles as an actuated canard</strong>, providing
+        roll authority for the whole aircraft.
+      </Para>
+      <Para>
+        The concept borrows from two places. Mike Patey's <em>Scrappy</em> build showed that fixed landing gear can
+        carry an airfoil profile and produce lift instead of being pure parasitic drag, which is relevant here because a light
+        aerobatic plane cannot afford the weight and complexity of a retraction mechanism. And the structural
+        architecture is modelled on the Kodiak bush plane main gear, which is the most robust fixed gear arrangement
+        I could find. My brief was to combine the two: a rigid, bolt on landing gear assembly whose fairing is a
+        lifting surface, actuated as a differential control surface.
+      </Para>
+
+      {/* TODO: add screenshots, full canard/gear assembly overview */}
+      <FigRow size="md" items={[
+        { src: `${BASE}/canard/assembly-overview.png`, caption: 'Canard landing-gear assembly (SolidWorks)' },
+        { src: `${BASE}/canard/on-aircraft.png`, caption: 'Assembly mounted on the aircraft' },
+      ]} />
+
+      <Subsection title="Landing Gear Architecture: Rigid, but Sprung" />
+      <Para>
+        The gear is conventional taildragger gear and nominally "rigid": there is no oleo strut, no rubber donut, no
+        dedicated spring element. The suspension comes from the structure itself. Each leg is a large diameter tube
+        ending in a hub and spindle, and each tube mounts into a <strong className="text-white">trunnion</strong> that
+        pivots on pins about an axis fixed to the chromoly tube airframe. The two trunnions are tied together by
+        cross braces.
+      </Para>
+      <Para>
+        Under landing loads, the vertical force at the wheels swings the legs about the trunnion pivot axes, which
+        rotates the trunnions slightly and forces the cross braces to flex from a flat shape into a shallow arc. That
+        controlled flexure <em>is</em> the spring: the load path deliberately routes energy into members sized to bend
+        elastically, rather than bending anything that isn't supposed to bend. Compared with the one piece aluminium
+        arc used on most aerobatic planes, this architecture is heavier but far more tolerant of hard landings; the
+        design brief was that the aircraft should be able to bounce off a runway without damage. The next step for
+        this part is an FEA study to quantify the effective spring rate and stress margins of the cross brace flexure.
+      </Para>
+
+      {/* TODO: add screenshots, trunnion detail and load path sketch from the review */}
+      <FigRow size="md" items={[
+        { src: `${BASE}/canard/trunnion-detail.png`, caption: 'Trunnion and pivot-pin detail' },
+        { src: `${BASE}/canard/load-path.png`, caption: 'Load path: wheel force to trunnion rotation to cross brace flexure' },
+      ]} />
+
+      <Subsection title="Canards as the Aircraft's Roll Control" />
+      <Para>
+        The second function of the assembly is what makes it interesting: the gear fairings are canard surfaces, and
+        they are the aircraft's <strong className="text-white">only roll-control surfaces</strong>, functionally the
+        ailerons. The aircraft is fly by wire with hydraulic actuation, which is what makes the mechanism practical:
+        a hydraulic actuator drives a pushrod assembly (clevis pin, heim joint, pushrod angle bracket, second
+        pushrod) into a bellcrank bolted directly to the canard. Actuating the piston deflects the two canards{' '}
+        <strong className="text-white">in opposite directions</strong>, one up and one down, producing a rolling
+        moment while the wing stays untouched.
+      </Para>
+      <Para>
+        Each canard rotates on a thrust bearing at the top and a second thrust bearing at the bottom, constraining the
+        surface axially while leaving rotation free. The whole canard unit is designed as a self contained module that
+        bolts to the airframe as one piece, so installation and removal don't disturb the rest of the aircraft. Two
+        detail points came out of design review: the heim joint attachment must be a bolt rather than a pin (a pin has
+        nothing constraining it axially at that joint), and the single actuator should be duplicated front and back
+        for redundancy; the assembly is symmetric, so mirroring it is a straightforward change.
+      </Para>
+      <Para>
+        Getting this mechanism right took <strong className="text-white">three design iterations</strong>. The
+        constraint that killed the first two was clearance at full deflection: with the actuator at end of stroke the
+        linkage passes within millimetres of the wheel assembly and the gear leg. The final geometry was validated
+        kinematically in SolidWorks by driving the actuator through its full stroke and checking the entire linkage
+        for interference and binding at every position.
+      </Para>
+
+      {/* TODO: add screenshots, pushrod/bellcrank mechanism, actuated positions */}
+      <FigRow size="md" items={[
+        { src: `${BASE}/canard/mechanism.png`, caption: 'Hydraulic actuator, pushrod and bellcrank linkage' },
+        { src: `${BASE}/canard/deflection.png`, caption: 'Differential deflection: one canard up, one down' },
+      ]} />
+
+      <Subsubsection title="Aerodynamic Caveat" />
+      <Para>
+        One open question I'm aware of: the downwash and wake shed by the canards will interact with the airflow over
+        the main wing, and that interference could affect the wing's lift distribution and handling. This still needs
+        to be verified through CFD or wind tunnel / flight testing, and the canard position and landing gear angle
+        would be adjusted based on those results. The focus of this work was the mechanical side (the structure,
+        actuation and mechanisms) rather than the aerodynamic optimization, which remains a next step.
+      </Para>
+
+      {/* Temporarily hidden, Design Review (Video) section
+      <Subsubsection title="Design Review (Video)" />
+      <Para>
+        The full aircraft was presented in a recorded design review. The segment below starts at the landing gear /
+        canard chapter, where I walk through the trunnion architecture, the flexure based suspension and the
+        roll control mechanism.
+      </Para>
+      <div className="my-5 flex flex-col items-center">
+        <div className="w-full max-w-2xl aspect-video rounded-md overflow-hidden border border-white/10 bg-black/30">
+          <iframe
+            src="https://www.youtube.com/embed/XNZeV1sazKA?start=1103"
+            title="Design review: canard landing gear section"
+            className="w-full h-full"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+        <p className="mt-3 max-w-lg text-center font-mono text-[0.62rem] leading-relaxed tracking-wide text-white/35">
+          Design review walkthrough: landing gear and canard section (from 18:23)
+        </p>
+      </div>
+      */}
+
+      <Outcome accent="#C9A96A" title="Key Outcomes">
+        <ul className="space-y-1">
+          <li>· A single assembly performing two jobs: fixed main landing gear and the aircraft's only roll control surface, enabling a wing with zero control surfaces.</li>
+          <li>· Passive suspension achieved through controlled structural flexure (Kodiak style trunnion architecture), with no dedicated spring or shock element.</li>
+          <li>· Hydraulic pushrod/bellcrank mechanism producing differential canard deflection, kinematically validated in SolidWorks over the full actuator stroke with no interference or binding.</li>
+          <li>· Fully modular: the complete canard/gear unit bolts to the airframe as one self contained piece, with a mirrored second actuator planned for redundancy.</li>
+        </ul>
+      </Outcome>
+    </>
+  );
+}
+
+function TabletContent() {
+  return (
+    <>
+      <Subsubsection title="Context" />
+      <Para>
+        This is a self directed concept study: a handheld{' '}
+        <strong className="text-white">ground control station for an unmanned aircraft</strong>, in the form of a
+        sealed, sunlight readable tablet controller. The footprint is 200 mm by 80 mm, landscape, with a display
+        occupying most of the front face, a joystick at each upper corner, three buttons on one side and a single
+        button on the other. I modelled the full assembly in CAD and then wrote it up as a mechanical teardown,
+        working from the outside in and setting out the reasoning behind each decision rather than only the result.
+      </Para>
+      <Para>
+        There was no customer specification behind it, so the first piece of work was deriving one from the use case:
+        outdoors, standing, for hours, in whatever weather the flight window allows. That gives IP54 minimum with IP65
+        as the goal, a 1.2 m drop onto concrete, −20 to 55 °C operating, full solar load at 1000 W/m², a full mission
+        day of endurance, two handed gloved operation, and a continuous command and video link.
+      </Para>
+
+      <Fig sizeOverride="max-h-[35rem] max-w-[57rem]" src={`${BASE}/tablet/1.png`}
+        caption="The device: front elevation and three-quarter view. Two joysticks and four buttons surround a display that occupies most of the front face." />
+
+      <Subsection title="The Tension That Shapes Everything" />
+      <Para>
+        Two requirements pull directly against each other. Sealing wants a closed box with as few joints as possible,
+        every one gasketed and clamped. Thermal management wants heat out of a device that cannot be vented, so every
+        watt has to conduct through solid structure to an outer surface. A sealed box is a good thermos. A third
+        requirement, <strong className="text-white">RF transparency</strong>, rules out the obvious answer of a metal
+        enclosure, because the command and video antenna sits inside the housing.
+      </Para>
+      <Para>
+        The architecture is the compromise between those three: a polymer enclosure for RF and cost, a metal internal
+        plate acting at once as structure, heat spreader and seal clamp, and the thermal path concentrated onto the
+        back face.
+      </Para>
+
+      <Fig sizeOverride="max-h-[32rem] max-w-[62rem]" src={`${BASE}/tablet/0.png`}
+        caption="Assembled to fully stripped: (A, B) front and rear assembled, (C) rear housing and heat spreader removed, (D) boards and battery exposed, (E, F) midplate installed then removed with the control seals beneath, (G) bare front housing." />
+
+      <Subsection title="Architecture: the Midplate Is the Structure" />
+      <Para>
+        The device is a layered stack built around a central structural plate: cover lens and display bonded into the
+        front frame, front housing, control seals, midplate, electronics, battery, heat spreader plate, rear housing.
+        The single decision underpinning everything else is that{' '}
+        <strong className="text-white">the midplate, not the housing, carries the load</strong>. The shells are
+        enclosures and sealing surfaces carrying no significant structural duty; every board, the battery and the
+        display reference the plate. That puts the grounding and the mechanical datum on one part, frees the shells to
+        be optimised for sealing and cosmetics rather than stiffness, and routes a drop through a stiff plate instead
+        of through the glass.
+      </Para>
+
+      <Fig sizeOverride="max-h-[32rem] max-w-[62rem]" src={`${BASE}/tablet/2.png`}
+        caption="Internal layout, rear housing removed: motherboard along the upper cavity, battery in the centre, joystick, button, charging and antenna daughterboards distributed around the perimeter. The green line is the perimeter gasket." />
+
+      <Para>
+        The electronics are deliberately split into a motherboard and five daughterboards. Splitting boards costs
+        money, since every interconnect is a connector, an assembly operation and a reliability risk, but it is right
+        here for four reasons: the controls sit at the extremities of a large, thin, non rectangular volume; small
+        commodity boards scrap cheaply where a full footprint board does not; the joysticks are the highest wear item
+        and are optional on this product, so isolating them supports both service and a de-populated variant; and
+        putting the antenna on its own board at the edge, away from the SoC and the switching regulators, buys more
+        noise margin than anything else available.
+      </Para>
+
+      <Fig sizeOverride="max-h-[40rem] max-w-[57rem]" src={`${BASE}/tablet/4.png`}
+        caption="Midplate: (A) in the assembly with the battery removed, (B) the part alone, with the mounting zone for each board, the control openings and the central battery pocket marked." />
+
+      <Subsubsection title="Four Jobs on One Part" />
+      <ul className="text-sm text-white/65 space-y-1.5 mb-3 pl-4">
+        <li><strong className="text-white">Structural spine:</strong> the stiffest member and the datum everything
+          else references.</li>
+        <li><strong className="text-white">Board carrier:</strong> a long channel for the motherboard, a narrower one
+          for the button and antenna board, end zones for the joystick and button boards.</li>
+        <li><strong className="text-white">Battery tray:</strong> the large central recess.</li>
+        <li><strong className="text-white">Seal clamp:</strong> its underside compresses the control seals against the
+          front housing.</li>
+      </ul>
+      <Para>
+        Consolidating these onto one die cast magnesium part (AZ91D, 1.2 mm nominal wall) is the right call: every
+        extra interface in the stack adds tolerance, and seal compression is only ever as consistent as the stack-up
+        controlling it. Magnesium gives the highest specific stiffness, integral bosses and pockets in one operation,
+        thermal spreading and an EMI ground plane. The costs are honest ones: it is anodically active, so it needs a
+        conversion coating and e-coat with the stainless fasteners isolated by it, and it blocks RF locally, so the
+        antenna keep-out is handled by cutting a window in the casting and overmoulding a polymer insert to restore
+        the stiffness there.
+      </Para>
+      <Para>
+        The plate enters the housing on a <strong className="text-white">transition fit</strong> and is retained by
+        screws, which is a deliberate distinction rather than loose terminology. An interference fit would have to be
+        driven home against populated boards and compressed seals, needing a fixture rather than an operator&rsquo;s
+        hands, and it would bow a large thin casting; since the underside of that casting is what sets the seal
+        compression, bowing is the one thing it cannot afford to do. The principle carried through the whole design:{' '}
+        <strong className="text-white">the fit locates, the screws clamp, the seals seal</strong>. A tight fit earns no
+        part of the IP rating.
+      </Para>
+
+      <Subsection title="Sealing: Four Interfaces, All of Which Have to Work" />
+      <Para>
+        Ingress protection is a system property. Water finds the weakest point on the perimeter, and the device is
+        only ever as sealed as its worst joint. There are four sealed interfaces here.
+      </Para>
+
+      <DataTable
+        caption="The four sealed interfaces and the part that closes each one"
+        head={['Interface', 'Seal', 'Design point']}
+        rows={[
+          ['Housing perimeter', 'Moulded silicone gasket, 50–60 Shore A, 20–30 % compression', 'Groove is one unbroken closed loop; every fastener sits outboard of it, so nothing penetrates the sealed volume'],
+          ['Control openings', 'Silicone seals, 40–50 Shore A, 15–25 % compression', 'Softer than the perimeter gasket so control feel is not degraded; compressed by the midplate underside'],
+          ['Display joint', 'Die-cut acrylic PSA on PU foam, 0.15–0.25 mm', 'Continuous closed loop; the foam bonds, seals and isolates the glass from frame flex in one part'],
+          ['Charging port', 'Silicone O-ring, 10–25 % radial squeeze, captive TPE plug', 'Radial rather than face seal, so sealing load is independent of how hard the user pushes'],
+        ]}
+      />
+
+      <Fig sizeOverride="max-h-[26rem] max-w-[40rem]" src={`${BASE}/tablet/8.png`}
+        caption="Control seals exposed in the housing, then covered and compressed by the midplate" />
+
+      <Fig sizeOverride="max-h-[26rem] max-w-[40rem]" src={`${BASE}/tablet/7.png`}
+        caption="Rear closure: continuous gasket groove, fixings in the land outboard of it" />
+
+      <Para>
+        Two features of the rear closure are worth calling out because both are easy to get wrong. The groove is{' '}
+        <strong className="text-white">unbroken</strong>: a gasket made from segments leaks at the joins, and a groove
+        that stops and restarts forces exactly that. And <strong className="text-white">every fastener is outboard of
+        the seal</strong>, which removes a whole category of problem, since a screw crossing a sealed boundary needs
+        its own seal and each one is an independent leak path. The corresponding requirement is that the mating bosses
+        in the front housing must be blind.
+      </Para>
+      <Para>
+        The real design risk on the control seals is compression control. The squeeze is set by a stack-up running
+        through housing, seal, midplate and screw joint. Too little and they leak; too much and the buttons stiffen,
+        the seals take a permanent set and the midplate is preloaded in bending. That wants hard stops which bottom
+        the plate against the housing, so seal performance does not depend on how hard an operator drove the screws.
+      </Para>
+
+      <Fig sizeOverride="max-h-[26rem] max-w-[40rem]" src={`${BASE}/tablet/3.png`}
+        caption="Display bonding land: a flat step, not a channel, which is what makes the joint a pre-formed tape rather than a dispensed bead" />
+
+      <Fig sizeOverride="max-h-[26rem] max-w-[40rem]" src={`${BASE}/tablet/9.png`}
+        caption="USB-C port: captive plug with an O-ring compressed radially against the bore wall" />
+
+      <Para>
+        The display land is a flat step rather than a recessed channel, and that geometry decides the joint. A channel
+        has walls to contain a dispensed adhesive bead; a flat land has nothing to contain a liquid, so it implies a
+        pre-formed adhesive, which means tape. A foam cored PSA does three jobs at once: it bonds, the closed cell
+        foam conforms and seals, and it decouples the glass from the frame so a drop or a squeeze is not transmitted
+        into the display as a bending load. That third function is easy to overlook and is often the reason a display
+        survives a drop. The land has to be at least 1.5 mm wide to carry it, which sets a floor under the bezel.
+      </Para>
+
+      <Subsection title="Thermal: the Back of the Device Is the Radiator" />
+      <Para>
+        A sealed enclosure has no useful internal convection, so every watt from the SoC, the power conversion and the
+        backlight has to conduct through solid material to an external surface. For part of the day the environment is
+        heating the enclosure rather than cooling it. A stamped aluminium 5052-H32 plate, 0.6 to 0.8 mm, takes a
+        concentrated flux from a die of perhaps 100 mm² and spreads it across a large area, dropping the flux density
+        by two orders of magnitude before it crosses into the polymer housing.
+      </Para>
+
+      <Fig sizeOverride="max-h-[26rem] max-w-[40rem]" src={`${BASE}/tablet/6.png`}
+        caption="Heat spreader: one pressed blank, pads stepping down onto the hot components, panel closing over the battery pocket" />
+
+      <Fig sizeOverride="max-h-[26rem] max-w-[40rem]" src={`${BASE}/tablet/5.png`}
+        caption="Rear view with the plate fitted. Amber is the moulded polymer housing, blue the metal spreader" />
+
+      <Para>
+        The pressing makes the part&rsquo;s dual role legible. Two small pads step down to meet the SoC and its
+        neighbours; the large panel behind them closes over the battery pocket, so the same part that collects the
+        heat also retains and protects the cell. The step formed around the main panel stiffens sheet that would
+        otherwise oil-can, and the mounting tabs are bent from the same blank rather than added as brackets, so it
+        costs one tool and no assembly operations.
+      </Para>
+      <Para>
+        Combining those two functions is efficient but sets a heat source and a temperature sensitive component on the
+        same conductive body, and cell life falls away above roughly 45 °C. Two things keep them apart: the pads are
+        local, so heat enters well away from the cell, and the panel over the battery sits off the cell face with an
+        air gap or a low conductivity pad rather than a thermal one. The pads themselves never touch the package
+        directly; a 2 to 3 W/m·K silicone gap pad at 20 to 40 % compression takes up the tolerance stack, and gap pads
+        beat grease here because they do not pump out over thermal cycles.
+      </Para>
+      <Para>
+        The battery is a lithium polymer pouch cell, which brings three mechanical obligations that get skipped
+        regularly: an 8 to 10 % swell allowance designed into the pocket from the start, since a cell in a tight
+        pocket bows the midplate and with the display directly above that force ends up in the glass; nothing rigid
+        bearing on the cell face; and retention without adhesive, so a full-day duty cycle device can have its battery
+        replaced rather than destroyed.
+      </Para>
+
+      <Subsection title="Fastening" />
+      <Para>
+        Fasteners are tiered by duty rather than standardised for convenience: M1.6 A2 stainless on the perimeter and
+        battery access into heat-set inserts, M2 for the midplate retention screws because they carry the seal clamp
+        load and come out every time the battery is serviced, and M1.6 thread-forming without inserts for the internal
+        board fixings that are assembled once at the factory. Thread-forming screws degrade their formed thread on
+        every cycle, so any joint a technician will open gets an insert. M2.5 is laptop chassis hardware and spends
+        boss diameter an 80 mm short edge does not have.
+      </Para>
+      <Para>
+        Perimeter spacing was set from compression uniformity rather than by eye: roughly 530 mm of perimeter once the
+        chamfered corners and the lower notch are allowed for, at a 20 to 28 mm pitch, gives about twenty fasteners,
+        closing up at the corners where a gasketed flange most wants to lift. The heads are countersunk so nothing
+        stands proud to catch or take an impact when the device is set down on rough ground, and the perimeter is
+        tightened in a star pattern, since working sequentially around the edge rolls the gasket compression ahead of
+        the fasteners.
+      </Para>
+
+      <Subsection title="What the Concept Does Not Yet Have" />
+      <Para>
+        Writing up the assembly sequence surfaced a real omission:{' '}
+        <strong className="text-white">the midplate as modelled has no aperture for the display cable</strong>. The
+        display sits in front of the plate and its driving connector is on the motherboard behind it, so the flex has
+        to cross the plate and currently has no route. It is cheap to add now and expensive later, because the slot
+        position is not free: it is fixed by where the display&rsquo;s flex tail exits and where the mating connector
+        sits. It also needs to be more than a hole, namely a slot sized for a service loop, fully radiused and
+        deburred because a cast edge against a polyimide flex is a cutting edge under vibration, with strain relief on
+        both sides and clearance from the battery pocket.
+      </Para>
+      <Para>
+        The other open items, in order: fix the thickness and mass budget, since only the footprint is currently
+        frozen; settle the target IP rating, which decides whether the display bond must seal or only retain, and
+        whether an ePTFE pressure equalisation vent is needed; build a thermal resistance network and test it, since
+        the passive path is sized by judgement and the answer decides between aluminium, copper and a vapour chamber;
+        run the tolerance stack behind the seal compression hard stops; define the antenna, which drives the keep-out
+        and therefore the RF window in the casting; decide the joystick service strategy; and run a drop simulation to
+        test the assumption that the midplate takes the load path.
+      </Para>
+
+      <Outcome accent="#C9A96A" title="Key Outcomes">
+        <ul className="space-y-1">
+          <li>· A full sealed enclosure architecture resolving a three way conflict between ingress protection, passive thermal management and RF transparency: polymer shell, structural magnesium midplate, and the back face as the radiator.</li>
+          <li>· One die cast midplate carrying four functions at once (structural spine, board carrier, battery tray and seal clamp), eliminating the tolerance stack that separate parts would introduce.</li>
+          <li>· Four sealed interfaces specified to an IP65 target, each with the seal type, durometer and compression range chosen for the duty rather than defaulted.</li>
+          <li>· Every material choice documented against the alternatives it beat, from PC/ABS over ABS on heat deflection temperature to silicone over nitrile on low temperature flexibility and compression set.</li>
+          <li>· An honest defect list: a missing display cable pass-through caught during write-up, plus the analysis still standing between the concept and a released design (thermal model, tolerance stack, drop simulation).</li>
+        </ul>
+      </Outcome>
+    </>
+  );
+}
+
+// ─── Reading progress ─────────────────────────────────────────────────────────
+
+/* Hairline across the very top that tracks how far down the page you are.
+   The portfolio is long and accordions make it longer, so it doubles as a
+   hint that there is more below. */
+function ReadingProgress() {
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const doc = document.documentElement;
+      // clientHeight/scrollTop rather than innerHeight/pageYOffset: under the
+      // CSS root zoom those window values are in a different coordinate space
+      // than scrollHeight, which would skew the progress bar.
+      const scrollable = doc.scrollHeight - doc.clientHeight;
+      setProgress(scrollable > 0 ? Math.min(1, doc.scrollTop / scrollable) : 0);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    update();
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  return (
+    <div className="fixed inset-x-0 top-0 z-[60] h-px bg-transparent">
+      <div
+        className="h-full origin-left bg-sand/70"
+        style={{ transform: `scaleX(${progress})`, transition: 'transform 120ms linear' }}
+      />
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+// Which top-level accordion each deep-link id lives under, so the parent opens
+// with it. Ids are shared with the Home page's project list.
+const PERSONAL_IDS = ['lqr', 'canard', 'starship', 'combustion', 'gcs-tablet'];
+const INTERNSHIP_IDS = ['caterpillar', 'ge'];
+
+const DownloadsPage = () => {
+  const location = useLocation();
+  // Section to auto-open + scroll to. Supports either navigation state
+  // (Link state={{ openSection: 'lqr' }}) or a #lqr hash in the URL.
+  const openSection = (location.state as { openSection?: string } | null)?.openSection
+    || location.hash.replace('#', '');
+
+  useEffect(() => {
+    if (!openSection) return;
+    // The target section (KaTeX equations + images) reflows for ~1s after mount,
+    // so a single scroll lands in the wrong place. Re-correct over time instead.
+    const navOffset = 96; // fixed navbar height
+    const scrollToTarget = () => {
+      const el = document.getElementById(openSection);
+      if (!el) return;
+      const top = el.getBoundingClientRect().top + window.pageYOffset - navOffset;
+      window.scrollTo({ top, behavior: 'smooth' });
+    };
+    const timers = [60, 250, 500, 900, 1400, 2200].map(d => setTimeout(scrollToTarget, d));
+    return () => timers.forEach(clearTimeout);
+  }, [openSection]);
+
+  return (
+    <PageShell>
+      <LightboxProvider>
+      <ReadingProgress />
+      <div className="gutter mx-auto max-w-6xl pb-20 pt-40">
+        <SectionHeading
+          eyebrow="Case studies"
+          title={<>Technical <span className="text-white/35">Portfolio</span></>}
+          subtitle="Internship projects and personal studies in numerical simulation, structural analysis, mechanism design, and control."
+        />
+
+        <Reveal>
+          <p className="eyebrow-muted mb-4">Highlight</p>
+          <RocketDemoCard />
+        </Reveal>
+
+        <div className="mt-16 space-y-2">
+          <MajorSection title="Personal Projects" initialOpen={PERSONAL_IDS.includes(openSection)}>
+            <SubSection label="Personal Study" title="LQR Full State Feedback Control & 6 DOF Body Integrator" id="lqr" initialOpen={openSection === 'lqr'}>
+              <LQRContent />
+            </SubSection>
+            <SubSection label="Personal Project" title="Canard Landing Gear & Roll Control Assembly" id="canard" initialOpen={openSection === 'canard'}>
+              <CanardContent />
+            </SubSection>
+            <SubSection label="Personal Study" title="Failure Prediction of the Starship Tank" id="starship" initialOpen={openSection === 'starship'}>
+              <StarshipContent />
+            </SubSection>
+            <SubSection label="Personal Study" title="Optimisation of Regenerative Cooling in a Combustion Chamber" id="combustion" initialOpen={openSection === 'combustion'}>
+              <CombustionContent />
+            </SubSection>
+            <SubSection label="Personal Project" title="Ground Control Station Tablet: Conceptual Mechanical Teardown" id="gcs-tablet" initialOpen={openSection === 'gcs-tablet'}>
+              <TabletContent />
+            </SubSection>
+          </MajorSection>
+
+          <MajorSection title="Internships" initialOpen={INTERNSHIP_IDS.includes(openSection)}>
+            <SubSection label="Final Year Internship" title="Caterpillar" id="caterpillar" initialOpen={openSection === 'caterpillar'}>
+              <CatContent />
+            </SubSection>
+            <SubSection label="Engineering Internship" title="General Electric Vernova" id="ge" initialOpen={openSection === 'ge'}>
+              <GEContent />
+            </SubSection>
+          </MajorSection>
+        </div>
+      </div>
+      </LightboxProvider>
+    </PageShell>
+  );
+};
+
+export default DownloadsPage;
