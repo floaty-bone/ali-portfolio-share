@@ -4,39 +4,39 @@ import { PageShell, Reveal, SectionHeading } from '../components/SiteChrome';
 const skills = [
   {
     name: 'Computer Aided Design (CAD)',
-    image: '/ali-portfolio/images-videos/skillsImages/1.png',
+    image: '/ali-portfolio-share/images-videos/skillsImages/1.png',
     description: 'Expertise in advanced design techniques (CNC machining, 3D printing, casting)',
   },
   {
     name: 'Finite Element Analysis (FEA)',
-    image: '/ali-portfolio/images-videos/skillsImages/4.png',
+    image: '/ali-portfolio-share/images-videos/skillsImages/4.png',
     description: 'Advanced simulation and structural integrity analysis',
   },
   {
     name: 'Fluid Flow + Thermal Analysis',
-    image: '/ali-portfolio/images-videos/skillsImages/2.png',
+    image: '/ali-portfolio-share/images-videos/skillsImages/2.png',
     description: 'Fluid dynamics and heat transfer',
   },
   {
     name: 'Software Development',
-    image: '/ali-portfolio/images-videos/skillsImages/3.png',
+    image: '/ali-portfolio-share/images-videos/skillsImages/3.png',
     description: 'Software development in C++ and Python',
   },
   {
     name: 'Control Systems Design',
-    image: '/ali-portfolio/images-videos/skillsImages/controlSystems.png',
+    image: '/ali-portfolio-share/images-videos/skillsImages/controlSystems.png',
     description: 'Design of automation and control systems',
   },
 ];
 
 const software = [
-  { name: 'Ansys Workbench', logo: '/ali-portfolio/images-videos/softwareImages/ansys.png' },
-  { name: 'Matlab Simulink', logo: '/ali-portfolio/images-videos/softwareImages/simulink.jpg' },
-  { name: 'C++', logo: '/ali-portfolio/images-videos/softwareImages/CPP.png' },
-  { name: 'Python', logo: '/ali-portfolio/images-videos/softwareImages/python.png' },
-  { name: 'Creo', logo: '/ali-portfolio/images-videos/softwareImages/creo.svg.png' },
-  { name: 'CATIA', logo: '/ali-portfolio/images-videos/softwareImages/catia.png' },
-  { name: 'SolidWorks', logo: '/ali-portfolio/images-videos/softwareImages/solidWorks.png' },
+  { name: 'Ansys Workbench', logo: '/ali-portfolio-share/images-videos/softwareImages/ansys.png' },
+  { name: 'Matlab Simulink', logo: '/ali-portfolio-share/images-videos/softwareImages/simulink.jpg' },
+  { name: 'C++', logo: '/ali-portfolio-share/images-videos/softwareImages/CPP.png' },
+  { name: 'Python', logo: '/ali-portfolio-share/images-videos/softwareImages/python.png' },
+  { name: 'Creo', logo: '/ali-portfolio-share/images-videos/softwareImages/creo.svg.png' },
+  { name: 'CATIA', logo: '/ali-portfolio-share/images-videos/softwareImages/catia.png' },
+  { name: 'SolidWorks', logo: '/ali-portfolio-share/images-videos/softwareImages/solidWorks.png' },
 ];
 
 const languages = [
