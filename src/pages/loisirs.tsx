@@ -26,7 +26,7 @@ const CentreInteret = () => {
             <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
               <div className="panel overflow-hidden p-2">
                 <img
-                  src="/ali-portfolio/images-videos/me_surfing.jpg"
+                  src="/ali-portfolio-share/images-videos/me_surfing.jpg"
                   alt="Surfing at Safi Point, Morocco"
                   className="h-[300px] w-full rounded-xl object-cover object-left sm:h-[420px]"
                 />
@@ -58,7 +58,7 @@ const CentreInteret = () => {
                   playsInline
                   preload="metadata"
                 >
-                  <source src="/ali-portfolio/images-videos/video.mp4" type="video/mp4" />
+                  <source src="/ali-portfolio-share/images-videos/video.mp4" type="video/mp4" />
                 </video>
               </div>
               <div className="lg:order-1">
