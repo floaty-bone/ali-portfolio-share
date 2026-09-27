@@ -78,7 +78,7 @@ const ExperienceEducationPage = () => {
             <div className="flex mb-10">
               <div className="mr-4">
                 <img
-                  src="/ali-portfolio/images-videos/inp.png"
+                  src="/ali-portfolio-share/images-videos/inp.png"
                   alt="Small thumbnail"
                   style={{ width: '120px', height: '40px' }}
                 />
@@ -105,7 +105,7 @@ const ExperienceEducationPage = () => {
             <div className="flex mb-10">
               <div className="mr-4">
                 <img
-                  src="/ali-portfolio/images-videos/prepa.jpg"
+                  src="/ali-portfolio-share/images-videos/prepa.jpg"
                   alt="Small thumbnail"
                   style={{ width: '50px', height: '45px' }}
                 />
@@ -136,7 +136,7 @@ const ExperienceEducationPage = () => {
             <div className="flex mb-10">
               <div className="mr-4">
                 <img
-                  src="/ali-portfolio/images-videos/yc.svg"
+                  src="/ali-portfolio-share/images-videos/yc.svg"
                   alt="Y Combinator logo"
                   style={{ width: '170px', height: 'auto', objectFit: 'contain' }}
                 />
@@ -162,39 +162,11 @@ const ExperienceEducationPage = () => {
               </div>
             </div>
 
-            {/* Caterpillar Stage PFE */}
-            <div className="flex mb-10">
-              <div className="mr-4">
-                <img
-                  src="/ali-portfolio/images-videos/Cat_Logo.png"
-                  alt="Caterpillar logo"
-                  style={{ width: '90px', height: 'auto', objectFit: 'contain' }}
-                />
-              </div>
-              <div className="mb-12">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="text-2xl mb-2">Final Year Internship: Optimization of Caterpillar D5 Bulldozer Track Tensioner</h4>
-                    <p className="text-gray-400 mb-4">02/2025 to 09/2025 | Caterpillar</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[#9F8E6D]">Reliability Analysis & Design</p>
-                  </div>
-                </div>
-                <p className="text-gray-300 leading-relaxed">
-                  Reliability analysis of the Caterpillar D5 track tensioner using field data (warranty claims),
-                  identification and prioritization of critical failures via DMAIC/FMEA methodology.
-                  Design validation through FEA simulation in ANSYS Mechanical and 3D CAD modeling
-                  of improvement concepts (Creo Parametric). Tools: Python, ANSYS, Creo.
-                </p>
-              </div>
-            </div>
-
             {/* General Electric Internship */}
             <div className="flex mb-10">
               <div className="mr-4">
                 <img
-                  src="/ali-portfolio/images-videos/ge.png"
+                  src="/ali-portfolio-share/images-videos/ge.png"
                   alt="General Electric logo"
                   style={{ width: '170px', height: 'auto', objectFit: 'contain' }}
                 />
@@ -224,7 +196,7 @@ const ExperienceEducationPage = () => {
             <div className="flex mb-10">
               <div className="mr-4">
                 <img
-                  src="/ali-portfolio/images-videos/alstom.png"
+                  src="/ali-portfolio-share/images-videos/alstom.png"
                   alt="Alstom logo"
                   style={{ width: '130px', height: 'auto', objectFit: 'contain' }}
                 />
@@ -252,7 +224,7 @@ const ExperienceEducationPage = () => {
             <div className="flex mb-10">
               <div className="mr-4">
                 <img
-                  src="/ali-portfolio/images-videos/sabca.png"
+                  src="/ali-portfolio-share/images-videos/sabca.png"
                   alt="Sabca logo"
                   style={{ width: '100px', height: '30px' }}
                 />
@@ -306,7 +278,7 @@ const ExperienceEducationPage = () => {
           </div>
           <div className="w-[200px] flex justify-center items-center">
             <img
-              src="/ali-portfolio/images-videos/profilePic.png"
+              src="/ali-portfolio-share/images-videos/profilePic.png"
               alt="Mohamed Ali Abouelazz Profile"
               className="w-full h-auto object-cover rounded-lg shadow-lg"
             />
