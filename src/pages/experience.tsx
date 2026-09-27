@@ -173,9 +173,9 @@ const ExperienceEducationPage = () => {
                   </div>
                 </div>
                 <p className="text-gray-300 leading-relaxed">
-                  This internship's content (including CAD/technical screenshots) is under a non-disclosure
-                  agreement (NDA) with the company, so it isn't shown on this particular link. Happy to discuss
-                  it in more detail directly.
+                  This internship involved proprietary CAD and technical work covered under a non-disclosure
+                  agreement (NDA) with the company, so I can't share those details or screenshots publicly.
+                  Happy to walk through the project verbally in an interview.
                 </p>
               </div>
             </div>
