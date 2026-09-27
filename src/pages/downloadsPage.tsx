@@ -5,7 +5,7 @@ import katex from 'katex';
 import 'katex/dist/katex.min.css';
 import { PageShell, Reveal, SectionHeading } from '../components/SiteChrome';
 
-const BASE = '/ali-portfolio/portfolio-images';
+const BASE = '/ali-portfolio-share/portfolio-images';
 
 // ─── KaTeX helpers ────────────────────────────────────────────────────────────
 
@@ -429,226 +429,6 @@ function GEContent() {
   );
 }
 
-// ─── Caterpillar content ──────────────────────────────────────────────────────
-
-function CatContent() {
-  return (
-    <>
-      <Subsection title="Objective and Context" />
-      <Para>
-        The Caterpillar D5 bulldozer had been accumulating field failures on its chain tensioner assembly: grease leaks,
-        cracked plugs, worn retainer plates, premature piston seal failures. The product support team had flagged the
-        problem but the failure modes had never been quantified, and the dominant root causes were still unclear. My
-        internship mission was to close that loop: diagnose the system end to end, validate the diagnosis with
-        simulation, and deliver redesign concepts that addressed the root causes while remaining compatible with
-        manufacturing and assembly constraints.
-      </Para>
-      <Para>
-        The project followed a full <strong className="text-white">DMAIC cycle</strong>. Scope was restricted to the D5
-        variants (D5 LGP, D5 XL) and specifically to the tensioner group. The D4, D6, D7, John Deere 700L and Komatsu
-        D51 PX systems were used as benchmark references. Deliverables were 3D CAD redesigns validated in FEA, not
-        physical prototypes. Tools: Creo Parametric for CAD, ANSYS Mechanical for structural FEA, Python for data
-        processing.
-      </Para>
-
-      <Fig
-        src={`${BASE}/cat/13.png`}
-        caption="D5 track tensioner: cross section showing the main components involved in the failure modes (spring tube, piston, piston seal, retainer, cylinder, plug). Grease pressure acts on the piston base to tension the track; the plug seals the rear of the cylinder and is bolted to the housing."
-      />
-      <FigRow items={[{ src: `${BASE}/cat/14.png` }, { src: `${BASE}/cat/15.png` }]} sizeOverride="max-h-64 max-w-md" />
-
-      <Subsection title="Automated Failure Mode Classification of Warranty Reports" />
-      <Para>
-        Caterpillar maintains a centralised warranty database: every time a dealer repairs a machine under warranty,
-        they log the failed part, the machine hours, a short <em>comment</em> field and a longer <em>claim story</em>.
-        Filtering by the tensioner part numbers returned records{' '}
-        <strong className="text-white">in the order of thousands</strong>, a dataset large enough to make statistical
-        analysis meaningful, but far too large to read manually. The real obstacle was that dealers worldwide write in
-        their native language: English, German, Polish, Japanese, Spanish, sometimes with abbreviations and regional
-        shorthand. Per component <em>frequency</em> was easy to compute from the part number alone, but extracting the
-        actual <em>failure mode</em> from free text required something smarter.
-      </Para>
-      <Para>
-        My first attempt used the Gemini API: feed each concatenated{' '}
-        <code className="text-xs bg-white/10 px-1 rounded">comment + claim_story</code> to the model with a system
-        prompt asking it to pick one mode from a fixed list. It worked well, but every call sent customer written
-        warranty text to a third party server. Even though the raw text did not mention "Caterpillar" or part numbers,
-        sending it out over an API was not acceptable for this use case. Deploying a local LLM server (Ollama style)
-        would have solved the privacy issue but required IT approvals I was not going to get in time.
-      </Para>
-      <Para>
-        I pivoted to a lighter, fully local approach based on{' '}
-        <strong className="text-white">semantic similarity with Sentence-BERT</strong>. SBERT embeds a sentence into a
-        dense high dimensional vector whose geometry captures semantic meaning: two sentences expressing the same idea
-        in different words (or different languages) land close together. I embedded each of the eight candidate failure
-        modes (<em>grease leak, broken threads, detached part, loose part, broken/cracked part, corroded part, clogged,
-        damaged threads/grooves</em>) once, then embedded every claim story, and classified each one by the argmax of
-        cosine similarity:
-      </Para>
-      <EqBlock>{`\\mathrm{FM}(t) \\;=\\; \\arg\\max_i \\; \\frac{\\mathbf{v}_t \\cdot \\mathbf{v}_{\\mathrm{MD}_i}}{\\|\\mathbf{v}_t\\|\\,\\|\\mathbf{v}_{\\mathrm{MD}_i}\\|}`}</EqBlock>
-      <Para>
-        A similarity threshold was applied below which the case was marked null, so borderline or uninformative claim
-        stories would not pollute the statistics. The{' '}
-        <code className="text-xs bg-white/10 px-1 rounded">all-MiniLM-L6-v2</code> model runs comfortably on CPU and
-        handled the multilingual content well enough that manual translation was unnecessary. The entire pipeline ran on
-        my workstation, no data left the machine. I validated the output against 50 manually labelled samples and the
-        classifier hit <strong className="text-white">48/50 = 96% accuracy</strong>, which was well within acceptable
-        bounds for prioritisation work.
-      </Para>
-      <Para>
-        Crossing the resulting failure mode distribution with each component's warranty cost revealed a clear ranking of
-        critical failures: leakage at the piston/seal interface, leakage at the fill valve/cylinder interface, plug
-        loosening and cracking, and leakage at the relief valve interface. Equally striking was what the data{' '}
-        <em>did not</em> contain: zero reports of the intentional fuse system actuating, despite multiple plug cracking
-        cases. That contradiction became the focus of the next phase.
-      </Para>
-
-      <FigRow sizeOverride="max-h-[15.68rem] max-w-[23.52rem]" items={[{ src: `${BASE}/cat/19.png` }, { src: `${BASE}/cat/20.png` }]} />
-      <Fig sizeOverride="max-h-[21.6rem] max-w-[51.84rem]" src={`${BASE}/cat/21.png`}
-        caption="Failure mode distribution per component after automated classification of the warranty records. Grease leak dominates across seals, valves and plug." />
-
-      <Subsection title="FEA of the Fuse System: Why Plugs Were Cracking" />
-      <Para>
-        The tensioner is built with an intentional mechanical fuse: a deformable steel bar backed by an O ring,
-        designed to open a leak path <em>before</em> any other component reaches its yield limit. If the fuse was doing
-        its job, cracked plugs should not exist in the warranty record. They did. Something in the actual stress
-        response of the assembly was violating the intent of the design, and I needed an FEA model to find out what.
-      </Para>
-      <Para>
-        I built a coupled model of the fuse assembly in ANSYS Mechanical, applying grease pressure directly to the
-        internal surfaces and pretensioning the bolts and plug per the design drawings. The first version modelled the
-        O ring explicitly as a hyperelastic body, the theoretically correct choice. In practice the O ring deformation
-        became so large that mesh elements distorted past ANSYS's convergence tolerance, and the simulation crashed
-        above 24 pressure units, far below the regime of interest (130 to 250 units).
-      </Para>
-      <Para>
-        Rather than fight the solver with finer meshes and remeshing hacks, I reformulated the leak criterion{' '}
-        <em>geometrically</em>. Per the Parker O ring Handbook, an elastomeric seal is guaranteed to hold as long as
-        its compression exceeds 5.7%, and is guaranteed to leak below 0% (loss of contact). If I remove the O ring
-        from the simulation entirely and track the local vertical displacement{' '}
-        <Eq>{'d_{z,k}'}</Eq> of each node along the seal contour, I can compute a per node compression:
-      </Para>
-      <EqBlock>{`C_{\\%,k} \\;=\\; \\frac{t_o - t_{c,k}}{t_o}, \\qquad t_{c,k} = d_{z,k} + g_d`}</EqBlock>
-      <Para>
-        where <Eq>{'t_o'}</Eq> is the free O ring thickness and <Eq>{'g_d'}</Eq> is the gland depth. Aggregating over
-        all contour nodes gives <strong className="text-white">guaranteed sealing</strong> when{' '}
-        <Eq>{'\\min_k C_{\\%,k} > 5.7\\%'}</Eq> and{' '}
-        <strong className="text-white">certain leakage</strong> when{' '}
-        <Eq>{'\\overline{C_\\%} < 0\\%'}</Eq>. With the O ring removed, the model meshed cleanly and ran stable all
-        the way to plastic yield, while still producing a physically meaningful leak prediction. The model also exploited
-        the cylindrical symmetry of the assembly, halving the node count and the solve time.
-      </Para>
-      <Para>
-        The results were unambiguous. At roughly 130 pressure units, right around the maximum service pressure recorded
-        during bench testing, the plug threads reached 329 MPa, already above the 310 MPa yield limit of the material.
-        At that same pressure the fuse plate had barely deformed, and the O ring compression was still sitting around
-        20% everywhere along the contour. Even pushing the simulation all the way to 240 units, the fuse still would not
-        open a leak path. <strong className="text-white">The fuse was massively oversized and effectively inactive</strong>,
-        leaving the plug as the <em>de facto</em> weakest link, exactly consistent with the warranty record.
-      </Para>
-
-      <FigRow sizeOverride="max-h-[15.6rem] max-w-[31.2rem]" items={[{ src: `${BASE}/cat/30.png` }, { src: `${BASE}/cat/31.png` }]} />
-      <p className="-mt-2 mb-4 font-mono text-[0.62rem] tracking-wide text-white/35">
-        Von Mises stress in the fuse assembly at 130 pressure units. The plug threads reach 329 MPa (yield = 310 MPa)
-        while the fuse plate remains elastic; the fuse never triggers before plug failure.
-      </p>
-
-      <Subsection title="Fuse Resizing" />
-      <Para>
-        With the fuse proven ineffective, the cheapest corrective action was to keep the same topology but thin down the
-        plate until it actually deformed in the right pressure window. The desired window had clear bounds: seal reliably
-        above the 130 unit maximum service pressure, and leak reliably below the 220 unit cylinder yield pressure, a
-        90 unit band to work inside. (The plug itself is weaker than the cylinder, but its redesign was out of scope for
-        this sizing study; once the plug is redesigned to match the cylinder, the same curves still apply.)
-      </Para>
-      <Para>
-        I reran the simulation parametrically across four supplier standard plate thicknesses: 3, 3.5, 4 and 6 mm,
-        and for each one extracted the minimum and average O ring compression along the contact contour as pressure
-        ramped. As expected, thinner plates leak earlier and produce wider grey zone bands. The 6 mm plate essentially
-        replicated the current oversized behaviour; the 3 mm plate leaked too early, barely clearing the 130 unit
-        service ceiling.
-      </Para>
-
-      <Fig sizeOverride="max-h-[19.5rem] max-w-[46.8rem]" src={`${BASE}/cat/35.png`}
-        caption="O ring compression vs. pressure for each plate thickness. Grey bands mark the transition between guaranteed sealing (min C% > 5.7%) and certain leakage (avg C% < 0%)." />
-
-      <Para>
-        The <strong className="text-white">3.5 mm plate</strong> was the clean answer: guaranteed sealing up to around
-        160 units (comfortably above 130) and guaranteed leakage by around 180 units (comfortably below 220). Part cost
-        stayed negligible since the geometry is still a simple stamped plate. One important limitation worth flagging:
-        this fuse is designed for static or quasi-static overpressure. A sudden pressure spike, for example a hard
-        idler impact, would require a much higher mass flow evacuation path than the small opening produced by plate
-        deformation. For that failure mode a proper relief valve is the right tool, and that informed the concept level
-        redesign.
-      </Para>
-
-      <Subsection title="Redesign Concepts and Pugh Matrix Selection" />
-      <Para>
-        Three full CAD redesigns were developed in Creo Parametric, each informed by both the warranty analysis and a
-        benchmark of the John Deere 700L, Komatsu D51 PX, and CAT D4/D7/TTL tensioners. The recurring themes across
-        successful competitor designs were consistent: welded (not threaded) cylinder assembly to eliminate the
-        fill valve leak path, chromed or sleeved piston cylinder interface to prevent wear induced seal failure,
-        oil based lubrication of the sliding contact, a positive mechanical alignment between cylinder and frame, and a
-        proper relief valve as the overpressure safety device rather than a deformable bar.
-      </Para>
-      <Para>
-        Concept 1 focused on a perfect guidance architecture: spherical joint at the piston end, a
-        spacer and sleeve retainer providing two line contacts against a precision machined cylinder, and an
-        interconnected oil chamber lubricating both interfaces. Concept 2 was inspired directly by the John Deere 700L:
-        a two piece welded cylinder, a resized fuse plate from the sizing study, and a guide hole catching the piston
-        if the chain goes slack. Concept 3 took a different route: it integrates the cylinder body directly into the
-        mobile portion of the TRF, uses a two level alignment (ball joint at one end, pin in hole at the other) that
-        makes the subassembly essentially self aligning under its own weight during installation, and keeps both valves
-        accessible without modifying the TRF hatch door.
-      </Para>
-      <Para>
-        The three concepts were scored against eight criteria in a Pugh matrix using the current D5 as the reference:
-        cost, intrusiveness on the existing design, serviceability, operator safety, ease of assembly, behaviour under
-        chain loose scenarios, fuse robustness, and manufacturability. The matrix was intentionally kept qualitative;
-        weighting the criteria with specific numerical coefficients would have introduced arbitrary bias given that
-        several criteria (assembly ease especially) were the blocking constraints.
-      </Para>
-      <Para>
-        <strong className="text-white">Concept 3 was selected.</strong> It scored positively on cost, serviceability,
-        manufacturability, intrusiveness and chain loose guidance; neutral on assembly ease, where its self aligning
-        geometry directly addresses what had been the single biggest pain point. Concept 2 was blocked by severe
-        assembly difficulty inside the cramped TRF, and Concept 1 offered no clear advantage over the reference.
-        Concept 3 is now positioned for physical prototyping and bench validation, the remaining step in the DMAIC
-        Control phase.
-      </Para>
-
-      {/* Concept cards: each concept's images contained in one uniform rectangle, laid out horizontally */}
-      <div className="flex flex-col gap-6 items-center my-4">
-        {[
-          { label: 'Concept 1', imgs: [`${BASE}/cat/37.png`, `${BASE}/cat/38.png`, `${BASE}/cat/39.png`] },
-          { label: 'Concept 2', imgs: [`${BASE}/cat/40.png`, `${BASE}/cat/41.png`, `${BASE}/cat/42.png`] },
-          { label: 'Concept 3', imgs: [`${BASE}/cat/43.png`, `${BASE}/cat/44.png`, `${BASE}/cat/45.png`] },
-        ].map(concept => (
-          <div key={concept.label} className="w-full max-w-[72.8rem] rounded-md bg-black/30 border border-white/10 overflow-hidden">
-            <div className="flex justify-center">
-              {concept.imgs.map(src => (
-                <div key={src} className="border-r border-white/10 last:border-0 h-[19.5rem] bg-black/20 flex items-center justify-center">
-                  <img src={src} alt="" className="h-full w-auto object-contain" />
-                </div>
-              ))}
-            </div>
-            <p className="py-2 text-center font-mono text-[0.62rem] tracking-wide text-white/35">{concept.label}</p>
-          </div>
-        ))}
-      </div>
-
-      <Outcome accent="#E8A020" title="Key Outcomes">
-        <ul className="space-y-1">
-          <li>· 684 multilingual warranty reports classified automatically at <strong className="text-white">96% accuracy</strong> with a local SBERT pipeline (no data leaves the machine).</li>
-          <li>· FEA with a geometric leak criterion proved the existing fuse never activates, and identified the plug as the real failure point, matching field data exactly.</li>
-          <li>· Resized fuse plate (3.5 mm) delivers a clean pressure window: seals up to ~160, leaks by ~180, well inside the 130 to 220 safety band.</li>
-          <li>· Concept 3 selected via Pugh matrix, addressing all four critical failure modes identified upstream and ready for prototyping.</li>
-        </ul>
-      </Outcome>
-    </>
-  );
-}
-
 // ─── Personal Studies content ─────────────────────────────────────────────────
 
 function CombustionContent() {
@@ -839,7 +619,7 @@ function LQRContent() {
         <div className="flex flex-col items-center gap-2">
           <div className="rounded-md overflow-hidden">
             <video
-              src="/ali-portfolio/images-videos/booster-catch-real.mp4"
+              src="/ali-portfolio-share/images-videos/booster-catch-real.mp4"
               className="h-96 w-auto max-w-full"
               autoPlay
               playsInline
@@ -852,7 +632,7 @@ function LQRContent() {
         <div className="flex flex-col items-center gap-2">
           <div className="rounded-md overflow-hidden">
             <video
-              src="/ali-portfolio/images-videos/booster-catch-sim.mp4"
+              src="/ali-portfolio-share/images-videos/booster-catch-sim.mp4"
               className="h-96 w-auto max-w-full"
               autoPlay
               playsInline
@@ -1560,7 +1340,7 @@ function ReadingProgress() {
 // Which top-level accordion each deep-link id lives under, so the parent opens
 // with it. Ids are shared with the Home page's project list.
 const PERSONAL_IDS = ['lqr', 'canard', 'starship', 'combustion', 'gcs-tablet'];
-const INTERNSHIP_IDS = ['caterpillar', 'ge'];
+const INTERNSHIP_IDS = ['ge'];
 
 const DownloadsPage = () => {
   const location = useLocation();
@@ -1620,9 +1400,6 @@ const DownloadsPage = () => {
           </MajorSection>
 
           <MajorSection title="Internships" initialOpen={INTERNSHIP_IDS.includes(openSection)}>
-            <SubSection label="Final Year Internship" title="Caterpillar" id="caterpillar" initialOpen={openSection === 'caterpillar'}>
-              <CatContent />
-            </SubSection>
             <SubSection label="Engineering Internship" title="General Electric Vernova" id="ge" initialOpen={openSection === 'ge'}>
               <GEContent />
             </SubSection>
